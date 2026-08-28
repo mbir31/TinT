@@ -1,0 +1,6 @@
+{
+  "name": "TinT - Bengali 3D Tic-Tac-Toe",
+  "description": "A modern Bengali-first 3D Tic-Tac-Toe and Four-in-a-Row board game PWA with local 2-player, smart AI, and real-time online multiplayer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

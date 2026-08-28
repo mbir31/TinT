@@ -1,0 +1,260 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { Language } from '../types';
+
+export const toBengaliDigits = (val: number | string): string => {
+  const str = String(val);
+  const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return str.replace(/[0-9]/g, (d) => bnDigits[parseInt(d, 10)]);
+};
+
+export const formatNumberByLang = (val: number | string, lang: Language): string => {
+  if (lang === 'bn') {
+    return toBengaliDigits(val);
+  }
+  return String(val);
+};
+
+export const TRANSLATIONS = {
+  bn: {
+    appTitle: 'TinT',
+    appSubtitle: 'থ্রিডি টিক-ট্যাক-টো ও ফোর-ইন-এ-রো',
+    tagline: 'বাংলায় আধুনিক ৩ডি কৌশল বোর্ড গেম',
+    
+    // Modes
+    localMode: 'স্থানীয় ২ খেলোয়াড়',
+    localModeDesc: 'একই ডিভাইসে মুখোমুখি খেলুন',
+    aiMode: 'রোবোর সাথে খেলুন',
+    aiModeDesc: 'কৃত্রিম বুদ্ধিমত্তার সাথে চ্যালেঞ্জ নিন',
+    onlineMode: 'অনলাইন মাল্টিপ্লেয়ার',
+    onlineModeDesc: 'রুম কোড দিয়ে দূর থেকে বন্ধুদের সাথে খেলুন',
+    
+    // Difficulty
+    difficulty: 'AI এর স্তর',
+    difficultyEasy: 'সহজ',
+    difficultyEasyDesc: 'নতুন খেলোয়াড়দের জন্য চমৎকার',
+    difficultyMedium: 'মাঝারি',
+    difficultyMediumDesc: 'কৌশলী এবং প্রতিরোধী চাল',
+    difficultyHard: 'কঠিন',
+    difficultyHardDesc: 'স্মার্ট মিনিম্যাক্স এবং প্যাটার্ন সার্চ',
+    
+    // Board Selection
+    selectBoard: 'বোর্ড নির্বাচন করুন',
+    boardSize: 'বোর্ডের আকার',
+    customBoard: 'কাস্টম বোর্ড',
+    rows: 'সারি (Rows)',
+    cols: 'কলাম (Columns)',
+    winRule3: '৩টি চিহ্ন এক লাইনে মিলালে জয়',
+    winRule4: 'যেকোনো ৪টি চিহ্ন এক লাইনে মিলালে জয় (আড়াআড়ি, লম্ব বা কোণাকুণি)',
+    ruleBadge: 'জয়ের নিয়ম',
+    
+    // Players Customization
+    customizePlayers: 'খেলোয়াড়দের পরিচয় ও রূপ',
+    player1: 'খেলোয়াড় ১',
+    player2: 'খেলোয়াড় ২',
+    humanPlayer: 'আপনার নাম',
+    aiPlayer: 'রোবোর নাম',
+    playerNamePlaceholder: 'খেলোয়াড়ের নাম লিখুন',
+    avatarSelection: 'চিহ্ন / অবতার',
+    colorTheme: 'রঙের থিম',
+    
+    // Game Play
+    turnOf: 'এর চাল',
+    nowTurn: 'এখন',
+    startGame: 'খেলা শুরু করুন',
+    playAgain: 'আবার খেলুন',
+    newGame: 'নতুন ম্যাচ',
+    changeBoard: 'বোর্ড পরিবর্তন',
+    home: 'হোম পেজ',
+    moves: 'মোট চাল',
+    score: 'স্কোর',
+    draw: 'ম্যাচ ড্র!',
+    drawSubtitle: 'কোনো খেলোয়াড়ই নির্ধারিত লাইন মেলাতে পারেনি। অসাধারণ লড়াই!',
+    winnerCelebration: 'অভিনন্দন! বিজয়ী হয়েছেন',
+    aiThinking: 'রোবো ভাবছে...',
+    zoomIn: 'জুম ইন',
+    zoomOut: 'জুম আউট',
+    resetView: 'ভিউ রিসেট',
+    restartMatch: 'ম্যাচ রিস্টার্ট',
+    
+    // Countdown
+    ready: 'প্রস্তুত হন',
+    go: 'শুরু!',
+    skipCountdown: 'স্কিপ',
+    
+    // Online Multiplayer
+    createRoom: 'নতুন রুম তৈরি করুন',
+    joinRoom: 'রুমে প্রবেশ করুন',
+    roomCode: 'রুম কোড',
+    enterRoomCode: '৫ অক্ষরের কোড লিখুন',
+    copyCode: 'কোড কপি করুন',
+    shareLink: 'আমন্ত্রণ লিংক শেয়ার',
+    codeCopied: 'রুম কোড ক্লিপবোর্ডে কপি হয়েছে!',
+    linkCopied: 'আমন্ত্রণ লিংক কপি হয়েছে!',
+    waitingOpponent: 'প্রতিপক্ষের প্রবেশের জন্য অপেক্ষা করা হচ্ছে...',
+    sharePrompt: 'আপনার বন্ধুকে এই কোডটি পাঠান',
+    opponentJoined: 'প্রতিপক্ষ যোগ দিয়েছে!',
+    opponentLeft: 'প্রতিপক্ষ খেলা ত্যাগ করেছে',
+    roomFull: 'এই রুমে ইতিমধ্যে দুইজন খেলোয়াড় আছে',
+    roomNotFound: 'রুমটি খুঁজে পাওয়া যায়নি বা মেয়াদ শেষ হয়ে গেছে',
+    reconnecting: 'সংযোগ বিচ্ছিন্ন হয়েছে। পুনরায় সংযোগের চেষ্টা চলছে...',
+    onlineConnected: 'অনলাইনে সংযুক্ত',
+    onlineDisconnected: 'অফলাইন মোড সক্রিয়',
+    rematchRequested: 'প্রতিপক্ষ রিম্যাচ অনুরোধ পাঠিয়েছে',
+    requestRematch: 'রিম্যাচ অনুরোধ',
+    acceptRematch: 'রিম্যাচ গ্রহণ করুন',
+    leaveRoom: 'রুম থেকে প্রস্থান',
+    
+    // Settings
+    settings: 'সেটিংস',
+    language: 'ভাষা (Language)',
+    soundEffects: 'শব্দ প্রভাব (Sound Effects)',
+    hapticFeedback: 'হ্যাপটিক ভাইব্রেশন (Vibration)',
+    reducedMotion: 'গতি হ্রাস (Reduced Motion)',
+    tilt3d: '৩ডি বোর্ড টিল্ট ও ছায়া (3D Depth)',
+    soundDesc: 'চাল ও জয়ের শব্দ শুনুন',
+    hapticDesc: 'চাল দিলে ডিভাইসে কম্পন অনুভব করুন',
+    motionDesc: 'অ্যানিমেশন তীব্রতা নিয়ন্ত্রণ করুন',
+    tiltDesc: 'কৌশলী ৩ডি বোর্ডের দৃষ্টিকোণ',
+    resetData: 'সব সেটিংস রিসেট করুন',
+    resetConfirmTitle: 'আপনি কি নিশ্চিত?',
+    resetConfirmDesc: 'আপনার সংরক্ষিত সব নাম, স্কোর এবং পছন্দের সেটিংস মুছে যাবে।',
+    cancel: 'বাতিল',
+    confirm: 'হ্যাঁ, মুছুন',
+    dataResetDone: 'সকল তথ্য সফলভাবে রিসেট করা হয়েছে।',
+    
+    // About
+    about: 'পরিচিতি ও নিয়মাবলী',
+    aboutTitle: 'TinT সম্পর্কে',
+    aboutContent: 'TinT হলো আধুনিক প্রোগ্রেসিভ ওয়েব অ্যাপ (PWA) নির্ভর একটি বাংলাদেশি ৩ডি বোর্ড গেম। এতে রয়েছে দ্রুত অফলাইন খেলা, বুদ্ধিমান AI, কাস্টম বোর্ড ও রিয়েল-টাইম অনলাইন রুম ব্যবস্থা।',
+    rulesSummary: '৩×৩ বোর্ডে ৩টি চিহ্ন এবং ৪×৪ বা তার চেয়ে বড় বোর্ডে ৪টি চিহ্ন আড়াআড়ি, লম্ব বা কোণাকুণি মেলালেই জয়লাভ হবে।',
+    offlineStatus: 'আপনি বর্তমানে অফলাইনে আছেন (লোকাল ও এআই খেলা সচল)',
+    installApp: 'অ্যাপ ইনস্টল করুন',
+    installPrompt: 'হোমস্ক্রিনে যোগ করে অফলাইনে খেলুন',
+    
+    // Credits
+    credit: 'Made with ♥ by ©munabbiRMushran'
+  },
+  en: {
+    appTitle: 'TinT',
+    appSubtitle: '3D Tic-Tac-Toe & Four-in-a-Row',
+    tagline: 'Modern Bengali-first 3D Strategy Board Game',
+    
+    // Modes
+    localMode: 'Local 2 Players',
+    localModeDesc: 'Play head-to-head on the same device',
+    aiMode: 'Play with AI',
+    aiModeDesc: 'Challenge the intelligent computer bot',
+    onlineMode: 'Online Multiplayer',
+    onlineModeDesc: 'Play remotely with friends via room code',
+    
+    // Difficulty
+    difficulty: 'AI Level',
+    difficultyEasy: 'Easy',
+    difficultyEasyDesc: 'Great for beginners and casual fun',
+    difficultyMedium: 'Medium',
+    difficultyMediumDesc: 'Tactical moves and active blocking',
+    difficultyHard: 'Hard',
+    difficultyHardDesc: 'Smart minimax lookahead and pattern search',
+    
+    // Board Selection
+    selectBoard: 'Select Board Size',
+    boardSize: 'Board Size',
+    customBoard: 'Custom Board',
+    rows: 'Rows',
+    cols: 'Columns',
+    winRule3: 'Align 3 marks in a line to win',
+    winRule4: 'Align any 4 marks in a line to win (Horizontal, Vertical, or Diagonal)',
+    ruleBadge: 'Win Rule',
+    
+    // Players Customization
+    customizePlayers: 'Player Identities',
+    player1: 'Player 1',
+    player2: 'Player 2',
+    humanPlayer: 'Your Name',
+    aiPlayer: 'AI Name',
+    playerNamePlaceholder: 'Enter player name',
+    avatarSelection: 'Token / Emblem',
+    colorTheme: 'Color Theme',
+    
+    // Game Play
+    turnOf: "'s Turn",
+    nowTurn: 'Now',
+    startGame: 'Start Match',
+    playAgain: 'Play Again',
+    newGame: 'New Match',
+    changeBoard: 'Change Board',
+    home: 'Home Page',
+    moves: 'Total Moves',
+    score: 'Score',
+    draw: 'Match Tied!',
+    drawSubtitle: 'Neither player achieved the winning sequence. Outstanding battle!',
+    winnerCelebration: 'Congratulations! Winner is',
+    aiThinking: 'Bot is calculating...',
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    resetView: 'Reset View',
+    restartMatch: 'Restart Match',
+    
+    // Countdown
+    ready: 'Get Ready',
+    go: 'PLAY!',
+    skipCountdown: 'Skip',
+    
+    // Online Multiplayer
+    createRoom: 'Create New Room',
+    joinRoom: 'Join Room',
+    roomCode: 'Room Code',
+    enterRoomCode: 'Enter 5-character room code',
+    copyCode: 'Copy Code',
+    shareLink: 'Share Invite Link',
+    codeCopied: 'Room code copied to clipboard!',
+    linkCopied: 'Invite link copied!',
+    waitingOpponent: 'Waiting for opponent to join...',
+    sharePrompt: 'Send this code or link to your friend',
+    opponentJoined: 'Opponent connected!',
+    opponentLeft: 'Opponent left the match',
+    roomFull: 'This room already has 2 active players',
+    roomNotFound: 'Room not found or session has expired',
+    reconnecting: 'Connection lost. Reconnecting...',
+    onlineConnected: 'Online Connected',
+    onlineDisconnected: 'Offline Mode Active',
+    rematchRequested: 'Opponent requested a rematch',
+    requestRematch: 'Request Rematch',
+    acceptRematch: 'Accept Rematch',
+    leaveRoom: 'Leave Room',
+    
+    // Settings
+    settings: 'Settings',
+    language: 'Language (ভাষা)',
+    soundEffects: 'Sound Effects',
+    hapticFeedback: 'Haptic Vibration',
+    reducedMotion: 'Reduced Motion',
+    tilt3d: '3D Depth & Tilt Physics',
+    soundDesc: 'Play audio cues on moves and wins',
+    hapticDesc: 'Feel device vibrations on interactions',
+    motionDesc: 'Control animation speed and particle effects',
+    tiltDesc: 'Tactile 3D board perspective angles',
+    resetData: 'Reset All Local Data',
+    resetConfirmTitle: 'Are you sure?',
+    resetConfirmDesc: 'This will erase all saved names, custom scores, and preferences.',
+    cancel: 'Cancel',
+    confirm: 'Yes, Reset',
+    dataResetDone: 'All settings have been successfully reset.',
+    
+    // About
+    about: 'About & Rules',
+    aboutTitle: 'About TinT',
+    aboutContent: 'TinT is a modern, Bengali-first 3D Progressive Web App board game featuring instant offline play, strategic AI bots, customizable grids, and real-time multiplayer room synchronization.',
+    rulesSummary: 'Match 3 consecutive marks on 3×3 boards or 4 consecutive marks on 4×4+ boards across horizontal, vertical, or diagonal directions.',
+    offlineStatus: 'You are currently offline (Local and AI modes fully functional)',
+    installApp: 'Install App',
+    installPrompt: 'Install to home screen for fast offline play',
+    
+    // Credits
+    credit: 'Made with ♥ by ©munabbiRMushran'
+  }
+};

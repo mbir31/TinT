@@ -1,0 +1,19 @@
+{
+  "name": "TinT - Bengali 3D Tic-Tac-Toe",
+  "short_name": "TinT",
+  "description": "বাংলা থ্রিডি টিক-ট্যাক-টো ও ফোর-ইন-এ-রো বোর্ড গেম",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "categories": ["games", "entertainment", "board"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

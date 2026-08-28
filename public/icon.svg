@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+    <linearGradient id="boardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="p1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="p2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="shadow3d" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="96" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2" />
+
+  <!-- 3D Board Base -->
+  <g transform="translate(256, 250) rotate(-15) skewX(-10)" filter="url(#shadow3d)">
+    <!-- Board Frame -->
+    <rect x="-160" y="-160" width="320" height="320" rx="36" fill="#1e293b" stroke="url(#boardGrad)" stroke-width="6" />
+    
+    <!-- Grid Cells -->
+    <rect x="-140" y="-140" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="-40" y="-140" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="60" y="-140" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+
+    <rect x="-140" y="-40" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="60" y="-40" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+
+    <rect x="-140" y="60" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="-40" y="60" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+    <rect x="60" y="60" width="80" height="80" rx="16" fill="#0f172a" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+
+    <!-- 3D Tokens on Grid -->
+    <!-- Player 1 Token (Top-Left) -->
+    <circle cx="-100" cy="-100" r="28" fill="url(#p1Grad)" filter="url(#glow)" />
+    <circle cx="-100" cy="-100" r="14" fill="#ffffff" opacity="0.9" />
+
+    <!-- Player 2 Token (Center) -->
+    <circle cx="0" cy="0" r="28" fill="url(#p2Grad)" filter="url(#glow)" />
+    <rect x="-12" y="-12" width="24" height="24" rx="4" fill="#ffffff" opacity="0.9" transform="rotate(45)" />
+
+    <!-- Player 1 Token (Bottom-Right) -->
+    <circle cx="100" cy="100" r="28" fill="url(#p1Grad)" filter="url(#glow)" />
+    <circle cx="100" cy="100" r="14" fill="#ffffff" opacity="0.9" />
+  </g>
+
+  <!-- Title Badge -->
+  <g transform="translate(256, 450)">
+    <rect x="-80" y="-24" width="160" height="48" rx="24" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(255, 255, 255, 0.2)" stroke-width="1.5" />
+    <text x="0" y="8" font-family="'Outfit', sans-serif" font-weight="800" font-size="24" fill="#ffffff" text-anchor="middle" letter-spacing="2">TinT</text>
+  </g>
+</svg>

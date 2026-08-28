@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-warm: #FFF9F0;
+    --navy-dark: #073B4C;
+    --coral-pink: #EF476F;
+    --sun-yellow: #FFD166;
+    --emerald-green: #06D6A0;
+    --ocean-blue: #118AB2;
+  }
+
+  body {
+    background-color: #FFF9F0;
+    color: #2D3436;
+    font-family: 'Hind Siliguri', 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Custom Neo-Pop & 3D utility classes */
+.neo-shadow-dark {
+  box-shadow: 4px 4px 0px 0px #073B4C;
+}
+
+.neo-shadow-dark-lg {
+  box-shadow: 8px 8px 0px 0px #073B4C;
+}
+
+.neo-shadow-dark-xl {
+  box-shadow: 12px 12px 0px 0px #073B4C;
+}
+
+.neo-shadow-pink {
+  box-shadow: 6px 6px 0px 0px #EF476F;
+}
+
+.neo-shadow-yellow {
+  box-shadow: 6px 6px 0px 0px #FFD166;
+}
+
+.neo-shadow-blue {
+  box-shadow: 6px 6px 0px 0px #118AB2;
+}
+
+.neo-shadow-green {
+  box-shadow: 6px 6px 0px 0px #06D6A0;
+}
+
+.neo-btn-press:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #073B4C;
+}
+
+/* 3D Board Perspective Container */
+.board-3d-stage {
+  perspective: 1200px;
+}
+
+.board-3d-surface {
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.token-3d-drop {
+  animation: tokenDrop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tokenDrop {
+  0% {
+    transform: translateY(-24px) scale(1.25);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(2px) scale(0.95);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Pulsing win ring */
+@keyframes winGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #06D6A0, 0 0 20px rgba(6, 214, 160, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 5px #FFD166, 0 0 28px rgba(255, 209, 102, 0.85);
+  }
+}
+
+.cell-winning-glow {
+  animation: winGlowPulse 1.2s infinite ease-in-out;
+}
+
+/* Subtle dot grid pattern */
+.bg-dot-pattern {
+  background-image: radial-gradient(#073B4C 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
