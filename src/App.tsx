@@ -203,7 +203,7 @@ export default function App() {
   // Move Execution Engine
   // ----------------------------------------------------
   const handleCellClick = useCallback(
-    async (row: number, col: number) => {
+    (row: number, col: number) => {
       if (gameState.status !== 'playing' || isAiThinking) return;
 
       // Online check: verify current turn matches local player
@@ -217,6 +217,12 @@ export default function App() {
       if (!isValidMove(gameState.board, row, col)) return;
 
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      const isP2 = currentPlayer.id === player2.id || currentPlayer.id === aiPlayer.id;
+
+      // Play immediate tactile sound and haptics
+      soundEngine.playPlace(isP2);
+      hapticsEngine.trigger('move');
+
       const newBoard = makeMove(gameState.board, row, col, currentPlayer.id);
       setLastMoveCoord({ row, col });
 
@@ -231,6 +237,8 @@ export default function App() {
         nextStatus = 'won';
         winnerId = currentPlayer.id;
         winningCells = winResult.winningCells;
+        soundEngine.playWin();
+        hapticsEngine.trigger('win');
 
         // Update winner score
         if (currentPlayer.id === player1.id) {
@@ -242,6 +250,8 @@ export default function App() {
         }
       } else if (isBoardFull(newBoard)) {
         nextStatus = 'draw';
+        soundEngine.playDraw();
+        hapticsEngine.trigger('draw');
       }
 
       const nextPlayerIndex = nextStatus === 'playing' ? (gameState.currentPlayerIndex === 0 ? 1 : 0) : gameState.currentPlayerIndex;

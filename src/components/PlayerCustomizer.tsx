@@ -132,18 +132,25 @@ export const PlayerCustomizer: React.FC<PlayerCustomizerProps> = ({
 
         {/* Tab Content */}
         <div className="p-5 overflow-y-auto max-h-[58vh] flex-1 bg-[#FFFDF9] flex flex-col gap-4">
-          {/* Live Preview Card */}
+          {/* Live Board Piece Preview Card */}
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C]">
             <div
-              className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${activeTheme.gradient} border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] flex items-center justify-center text-white flex-shrink-0`}
+              className={`w-20 h-14 rounded-2xl border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] flex items-center justify-center px-2 flex-shrink-0 ${
+                activeTheme.id === 'amber' ? 'text-[#073B4C]' : 'text-white'
+              }`}
+              style={{ backgroundColor: activeTheme.primary }}
             >
-              <AvatarIcon name={currentEdited.avatar} className="w-8 h-8 drop-shadow-sm" />
+              <span className="font-black text-sm sm:text-base tracking-wide truncate max-w-full text-center">
+                {currentEdited.name || 'Player'}
+              </span>
             </div>
             <div>
               <span className="text-[10px] font-black text-[#4A4E69] uppercase tracking-wider block">
-                {t.previewToken}
+                {language === 'bn' ? 'বোর্ডের চালের গুটি প্রিভিউ' : 'Board Piece Preview'}
               </span>
-              <span className="text-lg font-black text-[#073B4C]">{currentEdited.name}</span>
+              <span className="text-sm font-black text-[#073B4C]">
+                {language === 'bn' ? 'বোর্ডে এই নাম বসবে' : 'This name marks your cells'}
+              </span>
             </div>
           </div>
 
