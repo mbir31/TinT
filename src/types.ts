@@ -55,6 +55,34 @@ export interface MoveRecord {
   timestamp: number;
 }
 
+export type OnlineActionRecord =
+  | {
+      type: 'tictactoe_move';
+      row: number;
+      col: number;
+      playerId: string;
+      isWin: boolean;
+      isDraw: boolean;
+      winningCells?: CellCoord[];
+    }
+  | {
+      type: 'dots_move';
+      line: DotsLine;
+      playerId: string;
+      completedBoxes: CellCoord[];
+      consecutiveTurn: boolean;
+      isGameOver: boolean;
+    }
+  | {
+      type: 'c4_drop';
+      col: number;
+      droppedRow: number;
+      playerId: string;
+      isWin: boolean;
+      isDraw: boolean;
+      winningCells?: CellCoord[];
+    };
+
 export interface GameState {
   id: string;
   mode: GameMode;
@@ -71,20 +99,51 @@ export interface GameState {
   aiDifficulty?: AIDifficulty;
 }
 
+export type RoomStatus = 'waiting' | 'active' | 'finished' | 'abandoned';
+
 export interface RoomState {
   roomId: string;
   roomCode: string;
+  gameType: GameType;
   hostPlayer: Player;
   guestPlayer: Player | null;
-  boardConfig: BoardConfig;
-  gameState: GameState;
-  status: 'waiting' | 'active' | 'finished' | 'abandoned';
+  hostConnected: boolean;
+  guestConnected: boolean;
+  boardConfig?: BoardConfig;
+  dotsConfig?: DotsBoardConfig;
+  c4Config?: ConnectFourConfig;
+  gameState?: GameState;
+  dotsGameState?: DotsGameState;
+  c4GameState?: ConnectFourGameState;
+  status: RoomStatus;
+  version: number;
   hostLastSeen: number;
   guestLastSeen?: number;
   rematchRequestedBy: string | null;
+  rematchVotes: { [playerId: string]: boolean };
+  lastAction?: OnlineActionRecord;
   createdAt: number;
   updatedAt: number;
 }
+
+export type PublicRoomState = RoomState;
+
+export type OnlineMovePayload =
+  | {
+      gameType: 'tictactoe';
+      move: { row: number; col: number };
+      expectedVersion?: number;
+    }
+  | {
+      gameType: 'dotsboxes';
+      line: DotsLine;
+      expectedVersion?: number;
+    }
+  | {
+      gameType: 'connectfour';
+      col: number;
+      expectedVersion?: number;
+    };
 
 export interface DotsBoardConfig {
   dotRows: number; // e.g. 3, 4, 5, 6

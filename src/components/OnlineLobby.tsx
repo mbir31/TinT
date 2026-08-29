@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Player, Language, BoardConfig } from '../types';
+import { Player, Language, BoardConfig, GameType, DotsBoardConfig, ConnectFourConfig } from '../types';
 import { TRANSLATIONS } from '../i18n/translations';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
@@ -13,7 +13,10 @@ import { Copy, Share2, ArrowLeft, Globe, Users, Loader2, Zap, CheckCircle2, Aler
 
 interface OnlineLobbyProps {
   localPlayer: Player;
+  activeGame: GameType;
   boardConfig: BoardConfig;
+  dotsConfig?: DotsBoardConfig;
+  c4Config?: ConnectFourConfig;
   onCreateRoom: () => void;
   onJoinRoom: (roomCode: string) => void;
   onLeaveRoom: () => void;
@@ -26,7 +29,10 @@ interface OnlineLobbyProps {
 
 export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
   localPlayer,
+  activeGame,
   boardConfig,
+  dotsConfig,
+  c4Config,
   onCreateRoom,
   onJoinRoom,
   onLeaveRoom,
@@ -262,14 +268,30 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
                   </h4>
                 </div>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white border border-[#073B4C] text-[#118AB2]">
-                  {boardConfig.rows}x{boardConfig.cols} Grid
+                  {activeGame === 'dots'
+                    ? `${dotsConfig?.gridSize || 3}x${dotsConfig?.gridSize || 3} Dots`
+                    : activeGame === 'connectFour'
+                    ? `${c4Config?.rows || 6}x${c4Config?.cols || 7} C4`
+                    : `${boardConfig.rows}x${boardConfig.cols} Grid`}
                 </span>
               </div>
 
               <p className="text-xs font-bold text-[#4A4E69]">
                 {language === 'bn'
-                  ? `বর্তমান ${boardConfig.rows}x${boardConfig.cols} গ্রিডে একটি নতুন খেলার রুম তৈরি করুন এবং বন্ধুকে ইনভাইট করুন`
-                  : `Create a room with your current ${boardConfig.rows}x${boardConfig.cols} board configuration and invite a friend`}
+                  ? `বর্তমান ${
+                      activeGame === 'dots'
+                        ? 'ডটস অ্যান্ড বক্সেস'
+                        : activeGame === 'connectFour'
+                        ? 'কানেক্ট ফোর'
+                        : 'টিক-ট্যাক-টো'
+                    } কনফিগারেশনে একটি নতুন খেলার রুম তৈরি করুন`
+                  : `Create an online room for ${
+                      activeGame === 'dots'
+                        ? 'Dots & Boxes'
+                        : activeGame === 'connectFour'
+                        ? 'Connect Four'
+                        : 'Tic-Tac-Toe'
+                    } and invite your friend`}
               </p>
 
               <button

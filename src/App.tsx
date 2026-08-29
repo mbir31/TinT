@@ -5,6 +5,20 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
+  createOnlineRoom,
+  joinOnlineRoom,
+  reconnectOnlineRoom,
+  subscribeToOnlineRoom,
+  sendOnlineMove,
+  requestOnlineRematch,
+  leaveOnlineRoom,
+  sendOnlineReaction,
+  getStoredOnlineSession,
+  clearStoredOnlineSession,
+  getLocalSessionPlayerId,
+  ReactionPayload
+} from './engine/multiplayerEngine';
+import {
   GameType,
   GameMode,
   AIDifficulty,
@@ -16,7 +30,7 @@ import {
   ConnectFourGameState,
   DotsLine,
   Player,
-  RoomState,
+  PublicRoomState,
   UserSettings,
   CellCoord,
   AchievementToastItem
@@ -52,16 +66,6 @@ import {
 } from './engine/connectFourEngine';
 import { calculateAIMove } from './engine/aiEngine';
 import { calculateDotsAIMove } from './engine/dotsAiEngine';
-import {
-  createOnlineRoom,
-  joinOnlineRoom,
-  subscribeToOnlineRoom,
-  syncOnlineMove,
-  syncOnlineRematch,
-  syncLeaveRoom,
-  sendOnlineReaction,
-  ReactionPayload
-} from './engine/multiplayerEngine';
 import { soundEngine } from './engine/soundEngine';
 import { hapticsEngine } from './engine/hapticsEngine';
 import { TRANSLATIONS } from './i18n/translations';
@@ -186,10 +190,12 @@ export default function App() {
 
   // 10. Online Multiplayer State
   const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [roomState, setRoomState] = useState<PublicRoomState | null>(null);
+  const [localPlayerToken, setLocalPlayerToken] = useState<string | null>(null);
   const [isOnlineWaiting, setIsOnlineWaiting] = useState<boolean>(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [opponentLeftAlert, setOpponentLeftAlert] = useState<boolean>(false);
+  const [opponentDisconnected, setOpponentDisconnected] = useState<boolean>(false);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [localOnlineId, setLocalOnlineId] = useState<string>('p1');
   const unsubscribeRoomRef = useRef<(() => void) | null>(null);
@@ -512,6 +518,19 @@ export default function App() {
     (col: number) => {
       if (c4GameState.status !== 'playing' || isC4AiThinking) return;
 
+      // Online authoritative move flow
+      if (activeMode === 'online' || c4GameState.mode === 'online') {
+        if (!roomCode || !localPlayerToken || !roomState || roomState.status !== 'active') return;
+        const currentActivePlayer = c4GameState.players[c4GameState.currentPlayerIndex];
+        if (currentActivePlayer.id !== localOnlineId) return;
+
+        const isP2 = currentActivePlayer.id === player2.id || currentActivePlayer.id === aiPlayer.id;
+        soundEngine.playDiscDrop(col, c4GameState.config.cols, isP2);
+        hapticsEngine.trigger('move');
+        sendOnlineMove(roomCode, localPlayerToken, { gameType: 'connectfour', col }, roomState.version);
+        return;
+      }
+
       const result = makeConnectFourDrop(c4GameState, col);
       if (!result) return;
 
@@ -556,7 +575,7 @@ export default function App() {
 
       setC4GameState(result.nextState);
     },
-    [c4GameState, isC4AiThinking, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
+    [c4GameState, isC4AiThinking, activeMode, roomCode, localPlayerToken, roomState, localOnlineId, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
 
   // Connect Four AI Turn Effect
@@ -628,6 +647,19 @@ export default function App() {
     (line: DotsLine) => {
       if (dotsGameState.status !== 'playing' || isDotsAiThinking) return;
 
+      // Online authoritative move flow
+      if (activeMode === 'online' || dotsGameState.mode === 'online') {
+        if (!roomCode || !localPlayerToken || !roomState || roomState.status !== 'active') return;
+        const currentActivePlayer = dotsGameState.players[dotsGameState.currentPlayerIndex];
+        if (currentActivePlayer.id !== localOnlineId) return;
+
+        const isP2 = currentActivePlayer.id === player2.id || currentActivePlayer.id === aiPlayer.id;
+        soundEngine.playPlace(isP2);
+        hapticsEngine.trigger('move');
+        sendOnlineMove(roomCode, localPlayerToken, { gameType: 'dotsboxes', line }, roomState.version);
+        return;
+      }
+
       const result = makeDotsMove(dotsGameState, line);
       const currentPlayer = dotsGameState.players[dotsGameState.currentPlayerIndex];
       const isP2 = currentPlayer.id === player2.id || currentPlayer.id === aiPlayer.id;
@@ -668,7 +700,7 @@ export default function App() {
 
       setDotsGameState(result.nextState);
     },
-    [dotsGameState, isDotsAiThinking, player2.id, aiPlayer.id, triggerAchievementCheck]
+    [dotsGameState, isDotsAiThinking, activeMode, roomCode, localPlayerToken, roomState, localOnlineId, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
 
   // Dots AI Turn Effect
@@ -740,12 +772,18 @@ export default function App() {
     (row: number, col: number) => {
       if (gameState.status !== 'playing' || isAiThinking) return;
 
-      // Online check: verify current turn matches local player
-      if (gameState.mode === 'online') {
+      // Online authoritative move flow
+      if (activeMode === 'online' || gameState.mode === 'online') {
+        if (!roomCode || !localPlayerToken || !roomState || roomState.status !== 'active') return;
         const currentActivePlayer = gameState.players[gameState.currentPlayerIndex];
-        if (currentActivePlayer.id !== localOnlineId) {
-          return;
-        }
+        if (currentActivePlayer.id !== localOnlineId) return;
+        if (!isValidMove(gameState.board, row, col)) return;
+
+        const isP2 = currentActivePlayer.id === player2.id || currentActivePlayer.id === aiPlayer.id;
+        soundEngine.playPlace(isP2);
+        hapticsEngine.trigger('move');
+        sendOnlineMove(roomCode, localPlayerToken, { gameType: 'tictactoe', move: { row, col } }, roomState.version);
+        return;
       }
 
       if (!isValidMove(gameState.board, row, col)) return;
@@ -821,14 +859,9 @@ export default function App() {
       };
 
       setGameState(updatedGame);
-
-      if (gameState.mode === 'online' && roomCode) {
-        syncOnlineMove(roomCode, updatedGame);
-      } else {
-        saveActiveLocalGame(updatedGame);
-      }
+      saveActiveLocalGame(updatedGame);
     },
-    [gameState, isAiThinking, localOnlineId, roomCode, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
+    [gameState, isAiThinking, activeMode, roomCode, localPlayerToken, roomState, localOnlineId, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
 
   // Tic Tac Toe AI Turn Handler
@@ -929,10 +962,102 @@ export default function App() {
   }, []);
 
   const handleSendReaction = (emoji: string) => {
-    if (!roomCode || !roomState) return;
-    const sender = roomState.hostPlayer.id === localOnlineId ? roomState.hostPlayer : (roomState.guestPlayer || player1);
-    sendOnlineReaction(roomCode, emoji, sender.name, localOnlineId);
+    if (!roomCode || !localPlayerToken) return;
+    sendOnlineReaction(roomCode, localPlayerToken, emoji);
   };
+
+  const handleRoomUpdate = useCallback((updatedRoom: PublicRoomState) => {
+    setRoomState(updatedRoom);
+    if (updatedRoom.gameType && activeGame !== updatedRoom.gameType) {
+      setActiveGame(updatedRoom.gameType);
+    }
+
+    if (updatedRoom.status === 'active') {
+      setIsOnlineWaiting(false);
+      setShowCountdown(false);
+      setCurrentView('playing');
+    }
+
+    if (updatedRoom.gameType === 'tictactoe' && updatedRoom.gameState) {
+      const nextGame = updatedRoom.gameState;
+      setGameState((prev) => {
+        if (prev.status === 'playing' && nextGame.status === 'won') {
+          soundEngine.playWin();
+          hapticsEngine.trigger('win');
+          const winner = nextGame.players.find((p) => p.id === nextGame.winnerPlayerId);
+          if (winner) {
+            triggerAchievementCheck(winner, 'tictactoe', 'online');
+            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
+            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+          }
+          if (nextGame.winningCells && nextGame.winningCells.length > 0) {
+            setWinningMoveCoord(nextGame.winningCells[0]);
+          }
+        } else if (prev.status === 'playing' && nextGame.status === 'draw') {
+          soundEngine.playDraw();
+          hapticsEngine.trigger('draw');
+        }
+        return nextGame;
+      });
+    } else if (updatedRoom.gameType === 'dotsboxes' && updatedRoom.dotsGameState) {
+      const nextDots = updatedRoom.dotsGameState;
+      setDotsGameState((prev) => {
+        if (prev.status === 'playing' && nextDots.status === 'won') {
+          soundEngine.playWin();
+          hapticsEngine.trigger('win');
+          const winner = nextDots.players.find((p) => p.id === nextDots.winnerPlayerId);
+          if (winner) {
+            const wScore = nextDots.playerScores[winner.id] || 0;
+            triggerAchievementCheck(winner, 'dotsboxes', 'online', undefined, wScore);
+            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
+            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+          }
+        } else if (prev.status === 'playing' && nextDots.status === 'draw') {
+          soundEngine.playDraw();
+          hapticsEngine.trigger('draw');
+        }
+        return nextDots;
+      });
+    } else if (updatedRoom.gameType === 'connectfour' && updatedRoom.c4GameState) {
+      const nextC4 = updatedRoom.c4GameState;
+      setC4GameState((prev) => {
+        if (prev.status === 'playing' && nextC4.status === 'won') {
+          soundEngine.playWin();
+          hapticsEngine.trigger('win');
+          const winner = nextC4.players.find((p) => p.id === nextC4.winnerPlayerId);
+          if (winner) {
+            triggerAchievementCheck(winner, 'connectfour', 'online');
+            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
+            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+          }
+        } else if (prev.status === 'playing' && nextC4.status === 'draw') {
+          soundEngine.playDraw();
+          hapticsEngine.trigger('draw');
+        }
+        return nextC4;
+      });
+    }
+  }, [activeGame, player1.id, player2.id, triggerAchievementCheck]);
+
+  const setupRoomSubscription = useCallback((code: string) => {
+    if (unsubscribeRoomRef.current) {
+      unsubscribeRoomRef.current();
+    }
+
+    unsubscribeRoomRef.current = subscribeToOnlineRoom(code, {
+      onUpdate: (updatedRoom) => {
+        handleRoomUpdate(updatedRoom);
+      },
+      onReaction: handleIncomingReaction,
+      onOpponentLeft: () => {
+        setOpponentLeftAlert(true);
+        setOpponentDisconnected(false);
+      },
+      onConnectionChanged: ({ connected }) => {
+        setOpponentDisconnected(!connected);
+      }
+    });
+  }, [handleRoomUpdate, handleIncomingReaction]);
 
   const handleCreateOnlineRoom = async () => {
     soundEngine.playTap();
@@ -940,37 +1065,30 @@ export default function App() {
     try {
       setIsOnlineWaiting(true);
       setOpponentLeftAlert(false);
+      setOpponentDisconnected(false);
       const hostP: Player = { ...player1, score: 0 };
-      const { roomCode: code, roomState: initialRoom } = await createOnlineRoom(hostP, boardConfig);
+      const config =
+        activeGame === 'connectfour'
+          ? c4Config
+          : activeGame === 'dotsboxes'
+          ? dotsConfig
+          : boardConfig;
+
+      const { roomCode: code, playerToken, roomState: initialRoom } = await createOnlineRoom(
+        activeGame,
+        hostP,
+        config
+      );
       setRoomCode(code);
+      setLocalPlayerToken(playerToken);
       setRoomState(initialRoom);
       setLocalOnlineId(initialRoom.hostPlayer.id);
 
-      if (unsubscribeRoomRef.current) {
-        unsubscribeRoomRef.current();
-      }
-
-      unsubscribeRoomRef.current = subscribeToOnlineRoom(
-        code,
-        (updatedRoom) => {
-          setRoomState(updatedRoom);
-          if (updatedRoom.guestPlayer && updatedRoom.status === 'active') {
-            setIsOnlineWaiting(false);
-            setGameState(updatedRoom.gameState);
-            setCurrentView('playing');
-          } else if (updatedRoom.gameState) {
-            setGameState(updatedRoom.gameState);
-          }
-        },
-        handleIncomingReaction,
-        () => {
-          setOpponentLeftAlert(true);
-        }
-      );
-    } catch (err) {
+      setupRoomSubscription(code);
+    } catch (err: any) {
       console.error(err);
       setIsOnlineWaiting(false);
-      setOnlineError('failed');
+      setOnlineError(err.message || 'failed');
     }
   };
 
@@ -979,69 +1097,87 @@ export default function App() {
     hapticsEngine.trigger('tap');
     try {
       setOpponentLeftAlert(false);
+      setOpponentDisconnected(false);
       const guestP: Player = { ...player2, score: 0 };
       const result = await joinOnlineRoom(code, guestP);
 
-      if (!result.success || !result.roomState) {
+      if (!result.success || !result.roomState || !result.playerToken) {
         setOnlineError(result.error || 'roomNotFound');
         return;
       }
 
       setRoomCode(code.toUpperCase());
+      setLocalPlayerToken(result.playerToken);
       setRoomState(result.roomState);
       setLocalOnlineId(result.roomState.guestPlayer?.id || 'guest');
-      setGameState(result.roomState.gameState);
+      setActiveGame(result.roomState.gameType);
+      setActiveMode('online');
+      setIsOnlineWaiting(false);
       setCurrentView('playing');
 
-      if (unsubscribeRoomRef.current) {
-        unsubscribeRoomRef.current();
+      if (result.roomState.gameType === 'tictactoe' && result.roomState.gameState) {
+        setGameState(result.roomState.gameState);
+      } else if (result.roomState.gameType === 'dotsboxes' && result.roomState.dotsGameState) {
+        setDotsGameState(result.roomState.dotsGameState);
+      } else if (result.roomState.gameType === 'connectfour' && result.roomState.c4GameState) {
+        setC4GameState(result.roomState.c4GameState);
       }
 
-      unsubscribeRoomRef.current = subscribeToOnlineRoom(
-        code,
-        (updatedRoom) => {
-          setRoomState(updatedRoom);
-          if (updatedRoom.gameState) {
-            setGameState(updatedRoom.gameState);
-          }
-        },
-        handleIncomingReaction,
-        () => {
-          setOpponentLeftAlert(true);
-        }
-      );
-    } catch (err) {
+      setupRoomSubscription(code);
+    } catch (err: any) {
       console.error(err);
       setOnlineError('roomNotFound');
     }
   };
 
   const handleLeaveOnline = () => {
-    if (roomCode) {
-      syncLeaveRoom(roomCode, localOnlineId);
+    if (roomCode && localPlayerToken) {
+      leaveOnlineRoom(roomCode, localPlayerToken);
     }
     if (unsubscribeRoomRef.current) {
       unsubscribeRoomRef.current();
       unsubscribeRoomRef.current = null;
     }
+    clearStoredOnlineSession();
     setRoomCode(null);
+    setLocalPlayerToken(null);
     setRoomState(null);
     setIsOnlineWaiting(false);
     setOpponentLeftAlert(false);
+    setOpponentDisconnected(false);
     setCurrentView('mode-select');
   };
 
   const handleOnlineRematch = () => {
-    if (!roomCode || !roomState) return;
+    if (!roomCode || !localPlayerToken) return;
     soundEngine.playTap();
-    const resetGame = createInitialGameState(
-      [roomState.hostPlayer, roomState.guestPlayer || player2],
-      roomState.boardConfig,
-      'online'
-    );
-    resetGame.status = 'playing';
-    syncOnlineRematch(roomCode, localOnlineId, resetGame);
+    hapticsEngine.trigger('tap');
+    requestOnlineRematch(roomCode, localPlayerToken);
   };
+
+  // Attempt auto-reconnect on mount if previous session exists
+  useEffect(() => {
+    const session = getStoredOnlineSession();
+    if (session && session.roomCode && session.playerToken) {
+      reconnectOnlineRoom(session.roomCode, session.playerId, session.playerToken).then((res) => {
+        if (res.success && res.roomState) {
+          setRoomCode(res.roomState.roomCode);
+          setLocalPlayerToken(session.playerToken);
+          setLocalOnlineId(session.playerId);
+          setRoomState(res.roomState);
+          setActiveGame(res.roomState.gameType);
+          setActiveMode('online');
+          if (res.roomState.status === 'active') {
+            setCurrentView('playing');
+          } else if (res.roomState.status === 'waiting') {
+            setIsOnlineWaiting(true);
+            setCurrentView('online-lobby');
+          }
+          setupRoomSubscription(res.roomState.roomCode);
+        }
+      });
+    }
+  }, [setupRoomSubscription]);
 
   // ----------------------------------------------------
   // Rematch / Play Again Controls
@@ -1307,7 +1443,10 @@ export default function App() {
         {currentView === 'online-lobby' && (
           <OnlineLobby
             localPlayer={player1}
+            activeGame={activeGame}
             boardConfig={boardConfig}
+            dotsConfig={dotsConfig}
+            c4Config={c4Config}
             onCreateRoom={handleCreateOnlineRoom}
             onJoinRoom={handleJoinOnlineRoom}
             onLeaveRoom={handleLeaveOnline}
@@ -1358,15 +1497,29 @@ export default function App() {
 
                 <button
                   id="btn-quick-restart"
-                  onClick={handlePlayAgain}
+                  onClick={activeMode === 'online' ? handleOnlineRematch : handlePlayAgain}
                   className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl sm:rounded-2xl bg-[#FFD166] border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 transition-all"
-                  title={t.playAgain}
+                  title={activeMode === 'online' ? (settings.language === 'bn' ? 'পুনরায় খেলুন' : 'Rematch') : t.playAgain}
                 >
                   <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="hidden xs:inline text-[11px] sm:text-xs">{t.playAgain}</span>
+                  <span className="hidden xs:inline text-[11px] sm:text-xs">{activeMode === 'online' ? (settings.language === 'bn' ? 'রিম্যাচ' : 'Rematch') : t.playAgain}</span>
                 </button>
               </div>
             </div>
+
+            {/* Opponent Disconnection Reconnect Status Banner */}
+            {activeMode === 'online' && opponentDisconnected && !opponentLeftAlert && (
+              <div className="w-full max-w-xl p-2.5 rounded-2xl bg-amber-50 border-2 border-[#FFD166] text-[#073B4C] text-xs font-black flex items-center justify-between gap-2 shadow-[2px_2px_0px_0px_#073B4C] animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                  <span>
+                    {settings.language === 'bn'
+                      ? 'প্রতিপক্ষের ইন্টারনেট সংযোগ সাময়িক বিচ্ছিন্ন হয়েছে। পুনরায় যুক্ত হওয়ার অপেক্ষা করা হচ্ছে...'
+                      : 'Opponent temporarily disconnected. Waiting for reconnection...'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Players Status & Score HUD */}
             <div className="w-full grid grid-cols-2 gap-2 sm:gap-4 my-0.5 max-w-xl">

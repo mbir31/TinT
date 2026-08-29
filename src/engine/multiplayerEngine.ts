@@ -4,21 +4,74 @@
  */
 
 import { io, Socket } from 'socket.io-client';
-import { BoardConfig, GameState, Player, RoomState } from '../types';
+import {
+  GameType,
+  Player,
+  BoardConfig,
+  DotsBoardConfig,
+  ConnectFourConfig,
+  PublicRoomState,
+  OnlineMovePayload
+} from '../types';
 
 let socket: Socket | null = null;
 let currentSubscribedRoom: string | null = null;
 
+const STORAGE_SESSION_KEY = 'tint_active_online_session';
+const STORAGE_PLAYER_KEY = 'tint_local_player_session_id';
+
+export interface StoredOnlineSession {
+  roomCode: string;
+  playerToken: string;
+  playerId: string;
+  gameType: GameType;
+  timestamp: number;
+}
+
 // Unique session ID generator for local browser client
 export const getLocalSessionPlayerId = (): string => {
   if (typeof window === 'undefined') return 'p_' + Math.random().toString(36).substring(2, 8);
-  const key = 'tint_local_player_session_id';
-  let id = localStorage.getItem(key);
+  let id = localStorage.getItem(STORAGE_PLAYER_KEY);
   if (!id) {
     id = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
-    localStorage.setItem(key, id);
+    localStorage.setItem(STORAGE_PLAYER_KEY, id);
   }
   return id;
+};
+
+export const getStoredOnlineSession = (): StoredOnlineSession | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+    if (!raw) return null;
+    const session: StoredOnlineSession = JSON.parse(raw);
+    // Ignore sessions older than 2 hours
+    if (Date.now() - session.timestamp > 2 * 60 * 60 * 1000) {
+      clearStoredOnlineSession();
+      return null;
+    }
+    return session;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const saveStoredOnlineSession = (session: StoredOnlineSession): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.error('Error saving online session', e);
+  }
+};
+
+export const clearStoredOnlineSession = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+  } catch (e) {
+    console.error('Error clearing online session', e);
+  }
 };
 
 // Initialize or retrieve socket instance
@@ -26,8 +79,10 @@ export const getSocket = (): Socket => {
   if (!socket) {
     socket = io({
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 15,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
       autoConnect: true
     });
 
@@ -46,33 +101,49 @@ export const getSocket = (): Socket => {
   return socket;
 };
 
-// Check if socket is connected
 export const isSocketConnected = (): boolean => {
   return !!socket && socket.connected;
 };
 
 // Create a new online game room
 export const createOnlineRoom = async (
+  gameType: GameType,
   hostPlayer: Player,
-  boardConfig: BoardConfig
-): Promise<{ roomCode: string; roomState: RoomState }> => {
+  config: BoardConfig | DotsBoardConfig | ConnectFourConfig
+): Promise<{ roomCode: string; playerToken: string; roomState: PublicRoomState }> => {
   const s = getSocket();
   const hostId = hostPlayer.id || getLocalSessionPlayerId();
   const host: Player = { ...hostPlayer, id: hostId };
 
   return new Promise((resolve, reject) => {
-    // Timeout safety
     const timeout = setTimeout(() => {
       reject(new Error('Room creation timed out'));
-    }, 8000);
+    }, 10000);
 
     s.emit(
       'create_room',
-      { hostPlayer: host, boardConfig },
-      (response: { success: boolean; roomCode?: string; roomState?: RoomState; error?: string }) => {
+      { gameType, hostPlayer: host, config },
+      (response: {
+        success: boolean;
+        roomCode?: string;
+        playerToken?: string;
+        roomState?: PublicRoomState;
+        error?: string;
+      }) => {
         clearTimeout(timeout);
-        if (response.success && response.roomCode && response.roomState) {
-          resolve({ roomCode: response.roomCode, roomState: response.roomState });
+        if (response.success && response.roomCode && response.playerToken && response.roomState) {
+          saveStoredOnlineSession({
+            roomCode: response.roomCode,
+            playerToken: response.playerToken,
+            playerId: hostId,
+            gameType,
+            timestamp: Date.now()
+          });
+          resolve({
+            roomCode: response.roomCode,
+            playerToken: response.playerToken,
+            roomState: response.roomState
+          });
         } else {
           reject(new Error(response.error || 'Failed to create room'));
         }
@@ -85,7 +156,7 @@ export const createOnlineRoom = async (
 export const joinOnlineRoom = async (
   roomCodeInput: string,
   guestPlayer: Player
-): Promise<{ success: boolean; error?: string; roomState?: RoomState }> => {
+): Promise<{ success: boolean; error?: string; playerToken?: string; roomState?: PublicRoomState }> => {
   const s = getSocket();
   const code = roomCodeInput.trim().toUpperCase();
   const guestId = guestPlayer.id || getLocalSessionPlayerId();
@@ -94,17 +165,70 @@ export const joinOnlineRoom = async (
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       resolve({ success: false, error: 'connectionTimeout' });
-    }, 8000);
+    }, 10000);
 
     s.emit(
       'join_room',
       { roomCode: code, guestPlayer: guest },
-      (response: { success: boolean; roomState?: RoomState; error?: string }) => {
+      (response: {
+        success: boolean;
+        playerToken?: string;
+        roomState?: PublicRoomState;
+        error?: string;
+      }) => {
         clearTimeout(timeout);
-        if (response && response.success && response.roomState) {
-          resolve({ success: true, roomState: response.roomState });
+        if (response && response.success && response.roomState && response.playerToken) {
+          saveStoredOnlineSession({
+            roomCode: code,
+            playerToken: response.playerToken,
+            playerId: guestId,
+            gameType: response.roomState.gameType,
+            timestamp: Date.now()
+          });
+          resolve({
+            success: true,
+            playerToken: response.playerToken,
+            roomState: response.roomState
+          });
         } else {
           resolve({ success: false, error: response?.error || 'roomNotFound' });
+        }
+      }
+    );
+  });
+};
+
+// Reconnect to an existing room session
+export const reconnectOnlineRoom = async (
+  roomCode: string,
+  playerId: string,
+  playerToken: string
+): Promise<{ success: boolean; roomState?: PublicRoomState; error?: string }> => {
+  const s = getSocket();
+  const code = roomCode.trim().toUpperCase();
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      resolve({ success: false, error: 'reconnectTimeout' });
+    }, 10000);
+
+    s.emit(
+      'reconnect_room',
+      { roomCode: code, playerId, playerToken },
+      (response: { success: boolean; roomState?: PublicRoomState; error?: string }) => {
+        clearTimeout(timeout);
+        if (response && response.success && response.roomState) {
+          saveStoredOnlineSession({
+            roomCode: code,
+            playerToken,
+            playerId,
+            gameType: response.roomState.gameType,
+            timestamp: Date.now()
+          });
+          resolve({ success: true, roomState: response.roomState });
+        } else {
+          clearStoredOnlineSession();
+          resolve({ success: false, error: response?.error || 'roomExpired' });
         }
       }
     );
@@ -118,88 +242,153 @@ export type ReactionPayload = {
   senderId: string;
 };
 
-// Subscribe to room updates, reactions, and opponent status
+export interface OnlineRoomListeners {
+  onUpdate: (state: PublicRoomState) => void;
+  onReaction?: (reaction: ReactionPayload) => void;
+  onOpponentLeft?: (info?: { playerId: string }) => void;
+  onConnectionChanged?: (info: { playerId: string; connected: boolean }) => void;
+  onSocketConnected?: () => void;
+  onSocketDisconnected?: (reason: string) => void;
+}
+
+// Subscribe to authoritative room updates, reactions, connection events
 export const subscribeToOnlineRoom = (
   roomCode: string,
-  onUpdate: (state: RoomState) => void,
-  onReaction?: (reaction: ReactionPayload) => void,
-  onOpponentLeft?: () => void
+  listeners: OnlineRoomListeners
 ): (() => void) => {
   const s = getSocket();
   const code = roomCode.trim().toUpperCase();
   currentSubscribedRoom = code;
 
-  const roomUpdateListener = (updatedRoom: RoomState) => {
+  const roomUpdateListener = (updatedRoom: PublicRoomState) => {
     if (updatedRoom && updatedRoom.roomCode === code) {
-      onUpdate(updatedRoom);
+      listeners.onUpdate(updatedRoom);
     }
   };
 
   const reactionListener = (payload: ReactionPayload) => {
-    if (payload && payload.roomCode === code && onReaction) {
-      onReaction(payload);
+    if (payload && payload.roomCode === code && listeners.onReaction) {
+      listeners.onReaction(payload);
     }
   };
 
-  const opponentLeftListener = () => {
-    if (onOpponentLeft) {
-      onOpponentLeft();
+  const opponentLeftListener = (info?: { playerId: string }) => {
+    if (listeners.onOpponentLeft) {
+      listeners.onOpponentLeft(info);
+    }
+  };
+
+  const connectionListener = (info: { playerId: string; connected: boolean }) => {
+    if (listeners.onConnectionChanged) {
+      listeners.onConnectionChanged(info);
+    }
+  };
+
+  const onConnect = () => {
+    if (listeners.onSocketConnected) {
+      listeners.onSocketConnected();
+    }
+    // Attempt auto-reconnect if session exists
+    const session = getStoredOnlineSession();
+    if (session && session.roomCode === code) {
+      reconnectOnlineRoom(session.roomCode, session.playerId, session.playerToken).then((res) => {
+        if (res.success && res.roomState) {
+          listeners.onUpdate(res.roomState);
+        }
+      });
+    }
+  };
+
+  const onDisconnect = (reason: string) => {
+    if (listeners.onSocketDisconnected) {
+      listeners.onSocketDisconnected(reason);
     }
   };
 
   s.on('room_updated', roomUpdateListener);
   s.on('reaction_received', reactionListener);
   s.on('opponent_left', opponentLeftListener);
+  s.on('player_connection_changed', connectionListener);
+  s.on('connect', onConnect);
+  s.on('disconnect', onDisconnect);
 
   return () => {
     s.off('room_updated', roomUpdateListener);
     s.off('reaction_received', reactionListener);
     s.off('opponent_left', opponentLeftListener);
+    s.off('player_connection_changed', connectionListener);
+    s.off('connect', onConnect);
+    s.off('disconnect', onDisconnect);
     if (currentSubscribedRoom === code) {
       currentSubscribedRoom = null;
     }
   };
 };
 
-// Sync move to server
-export const syncOnlineMove = async (
+// Send authoritative move action
+export const sendOnlineMove = async (
   roomCode: string,
-  updatedGameState: GameState
-): Promise<void> => {
+  playerToken: string,
+  payload: OnlineMovePayload,
+  expectedVersion?: number
+): Promise<{ success: boolean; version?: number; error?: string }> => {
   const s = getSocket();
   const code = roomCode.trim().toUpperCase();
-  s.emit('game_move', { roomCode: code, gameState: updatedGameState });
+
+  return new Promise((resolve) => {
+    s.emit(
+      'make_move',
+      {
+        roomCode: code,
+        playerToken,
+        payload,
+        expectedVersion
+      },
+      (res: { success: boolean; version?: number; error?: string }) => {
+        resolve(res || { success: true });
+      }
+    );
+  });
 };
 
-// Request rematch
-export const syncOnlineRematch = async (
+// Request online rematch
+export const requestOnlineRematch = async (
   roomCode: string,
-  playerId: string,
-  resetGameState: GameState
-): Promise<void> => {
+  playerToken: string
+): Promise<{ success: boolean; error?: string }> => {
   const s = getSocket();
   const code = roomCode.trim().toUpperCase();
-  s.emit('request_rematch', { roomCode: code, playerId, resetGameState });
+
+  return new Promise((resolve) => {
+    s.emit(
+      'request_rematch',
+      { roomCode: code, playerToken },
+      (res: { success: boolean; error?: string }) => {
+        resolve(res || { success: true });
+      }
+    );
+  });
 };
 
 // Send real-time emoji reaction
 export const sendOnlineReaction = (
   roomCode: string,
-  emoji: string,
-  senderName: string,
-  senderId: string
+  playerToken: string,
+  emoji: string
 ): void => {
   const s = getSocket();
   const code = roomCode.trim().toUpperCase();
-  s.emit('send_reaction', { roomCode: code, emoji, senderName, senderId });
+  s.emit('send_reaction', { roomCode: code, playerToken, emoji });
 };
 
-// Leave room
-export const syncLeaveRoom = async (
+// Leave room and clear local session
+export const leaveOnlineRoom = async (
   roomCode: string,
-  playerId: string
+  playerToken: string
 ): Promise<void> => {
   const s = getSocket();
   const code = roomCode.trim().toUpperCase();
-  s.emit('leave_room', { roomCode: code, playerId });
+  s.emit('leave_room', { roomCode: code, playerToken });
+  clearStoredOnlineSession();
 };
+
