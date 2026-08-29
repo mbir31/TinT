@@ -5,6 +5,8 @@
 
 export type Language = 'bn' | 'en';
 
+export type GameType = 'tictactoe' | 'dotsboxes' | 'connectfour';
+
 export type GameMode = 'local' | 'ai' | 'online';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
@@ -84,6 +86,80 @@ export interface RoomState {
   updatedAt: number;
 }
 
+export interface DotsBoardConfig {
+  dotRows: number; // e.g. 3, 4, 5, 6
+  dotCols: number; // e.g. 3, 4, 5, 6
+  presetKey?: string;
+}
+
+export type LineOrientation = 'horizontal' | 'vertical';
+
+export interface DotsLine {
+  orientation: LineOrientation;
+  row: number;
+  col: number;
+  ownerId?: string;
+}
+
+export interface DotsGameState {
+  id: string;
+  gameType: 'dotsboxes';
+  mode: GameMode;
+  config: DotsBoardConfig;
+  // horizontalLines: dotRows x (dotCols - 1) matrix containing playerId or null
+  horizontalLines: (string | null)[][];
+  // verticalLines: (dotRows - 1) x dotCols matrix containing playerId or null
+  verticalLines: (string | null)[][];
+  // boxes: (dotRows - 1) x (dotCols - 1) matrix containing owner playerId or null
+  boxes: (string | null)[][];
+  players: [Player, Player];
+  playerScores: { [playerId: string]: number };
+  currentPlayerIndex: number;
+  status: GameStatus;
+  winnerPlayerId: string | null;
+  lastLine: DotsLine | null;
+  lastCompletedBoxes: CellCoord[];
+  consecutiveTurn: boolean;
+  moveCount: number;
+  aiDifficulty?: AIDifficulty;
+  createdAt: number;
+}
+
+export interface ConnectFourConfig {
+  rows: number; // default 6
+  cols: number; // default 7
+  winLength: number; // 4
+  presetKey?: string;
+}
+
+export interface ConnectFourGameState {
+  id: string;
+  gameType: 'connectfour';
+  mode: GameMode;
+  config: ConnectFourConfig;
+  board: (string | null)[][]; // rows x cols grid containing playerId or null
+  players: [Player, Player];
+  currentPlayerIndex: number;
+  status: GameStatus;
+  winnerPlayerId: string | null;
+  winningCells: CellCoord[];
+  lastDrop: { row: number; col: number } | null;
+  moveCount: number;
+  aiDifficulty?: AIDifficulty;
+  createdAt: number;
+}
+
+export interface TokenColorPalette {
+  id: string;
+  nameBn: string;
+  nameEn: string;
+  descBn: string;
+  descEn: string;
+  p1Theme: string;
+  p2Theme: string;
+  aiTheme: string;
+}
+
 export interface UserSettings {
   language: Language;
   soundEnabled: boolean;
@@ -91,6 +167,8 @@ export interface UserSettings {
   reducedMotion: boolean;
   tilt3dEnabled: boolean;
   audioVolume: number;
+  activeGameType?: GameType;
+  tokenPaletteId?: string;
   defaultPlayer1: {
     name: string;
     avatar: string;
@@ -111,4 +189,35 @@ export interface UserSettings {
   };
   defaultDifficulty: AIDifficulty;
   lastBoardConfig: BoardConfig;
+  lastDotsConfig?: DotsBoardConfig;
+  lastConnectFourConfig?: ConnectFourConfig;
+  dotsGridLineColor?: string;
+  dotsPegColor?: string;
+}
+
+export interface Achievement {
+  id: string;
+  titleBn: string;
+  titleEn: string;
+  descriptionBn: string;
+  descriptionEn: string;
+  iconName: 'trophy' | 'flame' | 'crown' | 'zap' | 'sparkles' | 'target' | 'star' | 'medal';
+  badgeColor: string;
+}
+
+export interface AchievementToastItem {
+  id: string;
+  achievement: Achievement;
+  unlockedAt: number;
+}
+
+export interface PlayerStats {
+  totalWins: number;
+  currentWinStreak: number;
+  maxWinStreak: number;
+  tictactoeWins: number;
+  dotsBoxesWins: number;
+  connectFourWins: number;
+  hardAiWins: number;
+  unlockedAchievementIds: string[];
 }

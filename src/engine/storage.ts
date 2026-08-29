@@ -22,15 +22,16 @@ export const DEFAULT_SETTINGS: UserSettings = {
   reducedMotion: false,
   tilt3dEnabled: true,
   audioVolume: 0.65,
+  tokenPaletteId: 'classic-duo',
   defaultPlayer1: {
     name: 'মুনাব্বির',
     avatar: 'crown',
-    colorKey: 'blue'
+    colorKey: 'coral'
   },
   defaultPlayer2: {
     name: 'মুশরাণ',
     avatar: 'flame',
-    colorKey: 'coral'
+    colorKey: 'blue'
   },
   defaultAIPlayer: {
     name: 'রোবো',
@@ -38,7 +39,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
     colorKey: 'purple'
   },
   defaultDifficulty: 'medium',
-  lastBoardConfig: DEFAULT_BOARD_CONFIG
+  lastBoardConfig: DEFAULT_BOARD_CONFIG,
+  dotsGridLineColor: '#073B4C',
+  dotsPegColor: '#073B4C'
 };
 
 export const loadUserSettings = (): UserSettings => {

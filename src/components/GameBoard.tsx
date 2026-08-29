@@ -19,6 +19,8 @@ interface GameBoardProps {
   currentPlayer: Player;
   winningCells?: CellCoord[] | null;
   lastMove: { row: number; col: number } | null;
+  winningMoveCoord?: { row: number; col: number } | null;
+  isReplayingWinningMove?: boolean;
   disabled?: boolean;
   tiltEnabled?: boolean;
   language: Language;
@@ -79,6 +81,8 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
   currentPlayer,
   winningCells,
   lastMove,
+  winningMoveCoord,
+  isReplayingWinningMove = false,
   disabled = false,
   tiltEnabled = true,
   language
@@ -89,10 +93,11 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [rotationAngle, setRotationAngle] = useState<number>(0);
   const boardRef = useRef<HTMLDivElement>(null);
-
-  // High-performance instant tap tracking to prevent missed/delayed clicks on mobile & touchscreens
   const lastTriggerTimeRef = useRef<number>(0);
   const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  // Effective winning move coordinate: either explicit prop or lastMove when there's a winning sequence
+  const effectiveWinningMove = winningMoveCoord || (winningCells && winningCells.length > 0 ? lastMove : null);
 
   const isWinningCell = (r: number, c: number): boolean => {
     if (!winningCells || winningCells.length === 0) return false;
@@ -243,6 +248,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
               row.map((cell, c) => {
                 const isWinning = isWinningCell(r, c);
                 const isLast = lastMove?.row === r && lastMove?.col === c;
+                const isWinningMove = isWinning && effectiveWinningMove?.row === r && effectiveWinningMove?.col === c;
 
                 let cellOwner: Player | null = null;
                 if (cell === player1.id || cell === 'X' || cell === 'player1') {
@@ -269,13 +275,14 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                     style={{ touchAction: 'manipulation' }}
                     className={`
                       ${getCellSizeClass()}
-                      group relative flex items-center justify-center rounded-xl sm:rounded-2xl border-2 sm:border-3 p-0.5 sm:p-1 select-none transition-transform
+                      group relative flex items-center justify-center rounded-xl sm:rounded-2xl border-2 sm:border-3 p-0.5 sm:p-1 select-none transition-all
                       ${
                         cell === null
                           ? 'bg-[#FFF9F0] border-[#073B4C] active:scale-95 active:bg-amber-100 shadow-[1.5px_1.5px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
                           : 'bg-white border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] cursor-default'
                       }
                       ${isWinning ? 'cell-winning-glow !border-[#06D6A0] !bg-emerald-50 scale-105 z-10' : ''}
+                      ${isWinningMove ? 'ring-4 ring-[#FFD166] shadow-[0_0_24px_rgba(255,209,102,0.9)] z-20 ' + (isReplayingWinningMove ? 'winning-move-replaying' : '') : ''}
                       ${isLast && !isWinning ? 'ring-2 sm:ring-3 ring-[#FFD166]' : ''}
                     `}
                     aria-label={
@@ -316,6 +323,16 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                             {cellDisplayName}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Winning Move Trophy / Sparkle Badge */}
+                    {isWinningMove && (
+                      <div
+                        className="absolute -top-2 -right-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#FFD166] border-2 border-[#073B4C] shadow-[1px_1px_0px_0px_#073B4C] flex items-center justify-center text-[#073B4C] z-30 animate-bounce"
+                        title={language === 'bn' ? 'বিজয়ী চাল' : 'Winning Move'}
+                      >
+                        <span className="text-[10px] sm:text-xs">👑</span>
                       </div>
                     )}
 

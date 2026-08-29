@@ -19,15 +19,17 @@ import {
 } from 'lucide-react';
 
 interface AvatarIconProps {
-  name: string;
+  name?: string;
+  avatarKey?: string;
   className?: string;
   size?: number;
 }
 
-export const AvatarIcon: React.FC<AvatarIconProps> = ({ name, className = 'w-5 h-5', size }) => {
+export const AvatarIcon: React.FC<AvatarIconProps> = ({ name, avatarKey, className = 'w-5 h-5', size }) => {
   const iconProps = { className, size };
+  const key = name || avatarKey || 'circle';
 
-  switch (name) {
+  switch (key) {
     case 'crown':
       return <Crown {...iconProps} />;
     case 'tiger':

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type HapticType = 'tap' | 'place' | 'move' | 'medium' | 'win' | 'draw' | 'error' | 'countdown';
+export type HapticType = 'tap' | 'place' | 'move' | 'medium' | 'heavy' | 'win' | 'draw' | 'error' | 'countdown';
 
 class HapticsEngine {
   private enabled: boolean = true;
@@ -28,6 +28,9 @@ class HapticsEngine {
           break;
         case 'medium':
           navigator.vibrate(45);
+          break;
+        case 'heavy':
+          navigator.vibrate([35, 40, 60]);
           break;
         case 'win':
           navigator.vibrate([40, 60, 80, 60, 140]);

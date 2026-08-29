@@ -4,12 +4,13 @@
  */
 
 import React, { useState } from 'react';
-import { UserSettings, Language } from '../types';
+import { UserSettings, Language, TokenColorPalette } from '../types';
 import { TRANSLATIONS } from '../i18n/translations';
+import { TOKEN_COLOR_PALETTES, PLAYER_THEMES } from '../constants/themes';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
 import { clearAllLocalData } from '../engine/storage';
-import { X, Volume2, VolumeX, Smartphone, Eye, Sparkles, Trash2, Globe, Compass } from 'lucide-react';
+import { X, Volume2, VolumeX, Smartphone, Eye, Sparkles, Trash2, Globe, Compass, Palette, RotateCcw, Check, Layers, User, Bot } from 'lucide-react';
 
 interface SettingsModalProps {
   settings: UserSettings;
@@ -17,6 +18,17 @@ interface SettingsModalProps {
   onClose: () => void;
   language: Language;
 }
+
+const GRID_COLOR_PRESETS = [
+  { id: 'classic', nameBn: 'ক্লাসিক নেভি', nameEn: 'Classic Navy', lineColor: '#073B4C', dotColor: '#073B4C' },
+  { id: 'charcoal', nameBn: 'ডার্ক স্লেট', nameEn: 'Dark Slate', lineColor: '#334155', dotColor: '#1E293B' },
+  { id: 'ocean', nameBn: 'সাগর নীল', nameEn: 'Ocean Blue', lineColor: '#118AB2', dotColor: '#0A6684' },
+  { id: 'emerald', nameBn: 'পান্না সবুজ', nameEn: 'Emerald Teal', lineColor: '#06D6A0', dotColor: '#04A77D' },
+  { id: 'purple', nameBn: 'রয়েল ভায়োলেট', nameEn: 'Royal Violet', lineColor: '#7209B7', dotColor: '#560BAD' },
+  { id: 'amber', nameBn: 'সোনালী অ্যাম্বার', nameEn: 'Warm Amber', lineColor: '#D97706', dotColor: '#B45309' },
+  { id: 'coral', nameBn: 'গোলাপী কোরাল', nameEn: 'Coral Pink', lineColor: '#EF476F', dotColor: '#D6224E' },
+  { id: 'rose', nameBn: 'রুবি রোজ', nameEn: 'Ruby Rose', lineColor: '#BE185D', dotColor: '#9D174D' },
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
@@ -260,6 +272,306 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               {settings.reducedMotion ? t.on : t.off}
             </button>
+          </div>
+
+          {/* Game Token Color Palettes Customizer */}
+          <div className="p-4 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] flex flex-col gap-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#EF476F] border border-[#073B4C] flex items-center justify-center text-white flex-shrink-0 shadow-[1px_1px_0px_0px_#073B4C]">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-sm font-black text-[#073B4C] block">
+                    {t.tokenPalettesTitle}
+                  </span>
+                  <span className="text-xs font-bold text-[#4A4E69]">
+                    {t.tokenPalettesDesc}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Token Color Preview */}
+            <div className="p-2.5 rounded-xl bg-[#FFF9F0] border border-[#073B4C]/20 flex items-center justify-around gap-2">
+              {/* Player 1 token pill */}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className="w-10 h-10 rounded-xl border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex items-center justify-center text-white font-black text-sm transition-transform hover:scale-105"
+                  style={{
+                    backgroundColor: PLAYER_THEMES[settings.defaultPlayer1.colorKey]?.primary || '#EF476F'
+                  }}
+                >
+                  <User className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-black text-[#073B4C]">
+                  {t.p1TokenLabel}
+                </span>
+              </div>
+
+              {/* VS indicator */}
+              <div className="text-xs font-black text-[#4A4E69] px-2 py-0.5 rounded-md bg-white/80 border border-[#073B4C]/10">
+                VS
+              </div>
+
+              {/* Player 2 token pill */}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className="w-10 h-10 rounded-xl border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex items-center justify-center text-white font-black text-sm transition-transform hover:scale-105"
+                  style={{
+                    backgroundColor: PLAYER_THEMES[settings.defaultPlayer2.colorKey]?.primary || '#118AB2'
+                  }}
+                >
+                  <User className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-black text-[#073B4C]">
+                  {t.p2TokenLabel}
+                </span>
+              </div>
+
+              {/* Divider */}
+              <div className="h-8 w-px bg-[#073B4C]/20" />
+
+              {/* AI token pill */}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className="w-10 h-10 rounded-xl border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex items-center justify-center text-white font-black text-sm transition-transform hover:scale-105"
+                  style={{
+                    backgroundColor: PLAYER_THEMES[settings.defaultAIPlayer.colorKey]?.primary || '#7209B7'
+                  }}
+                >
+                  <Bot className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-black text-[#073B4C]">
+                  {t.aiTokenLabel}
+                </span>
+              </div>
+            </div>
+
+            {/* Selectable Palettes Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {TOKEN_COLOR_PALETTES.map((palette) => {
+                const isSelected =
+                  settings.defaultPlayer1.colorKey === palette.p1Theme &&
+                  settings.defaultPlayer2.colorKey === palette.p2Theme &&
+                  settings.defaultAIPlayer.colorKey === palette.aiTheme;
+
+                const p1Theme = PLAYER_THEMES[palette.p1Theme] || PLAYER_THEMES.coral;
+                const p2Theme = PLAYER_THEMES[palette.p2Theme] || PLAYER_THEMES.blue;
+                const aiTheme = PLAYER_THEMES[palette.aiTheme] || PLAYER_THEMES.purple;
+
+                return (
+                  <button
+                    key={palette.id}
+                    onClick={() => {
+                      soundEngine.playTap();
+                      if (settings.hapticsEnabled) hapticsEngine.trigger('tap');
+                      onUpdateSettings({
+                        ...settings,
+                        tokenPaletteId: palette.id,
+                        defaultPlayer1: {
+                          ...settings.defaultPlayer1,
+                          colorKey: palette.p1Theme
+                        },
+                        defaultPlayer2: {
+                          ...settings.defaultPlayer2,
+                          colorKey: palette.p2Theme
+                        },
+                        defaultAIPlayer: {
+                          ...settings.defaultAIPlayer,
+                          colorKey: palette.aiTheme
+                        }
+                      });
+                    }}
+                    className={`p-2.5 rounded-xl border-2 transition-all text-left flex flex-col gap-2 ${
+                      isSelected
+                        ? 'border-[#073B4C] bg-white shadow-[3px_3px_0px_0px_#073B4C] ring-2 ring-[#073B4C]/20'
+                        : 'border-[#073B4C]/20 bg-white/70 hover:bg-white hover:border-[#073B4C]/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-xs font-black text-[#073B4C] truncate">
+                        {language === 'bn' ? palette.nameBn : palette.nameEn}
+                      </span>
+                      {isSelected && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-[#06D6A0] text-white text-[9px] font-black flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" />
+                          <span>{t.activePaletteTag}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Color Dots Strip */}
+                    <div className="flex items-center justify-between pt-1 border-t border-[#073B4C]/10">
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-5 h-5 rounded-full border-2 border-[#073B4C] shadow-[1px_1px_0px_0px_#073B4C]"
+                          style={{ backgroundColor: p1Theme.primary }}
+                          title={`Player 1: ${p1Theme.name}`}
+                        />
+                        <div
+                          className="w-5 h-5 rounded-full border-2 border-[#073B4C] shadow-[1px_1px_0px_0px_#073B4C]"
+                          style={{ backgroundColor: p2Theme.primary }}
+                          title={`Player 2: ${p2Theme.name}`}
+                        />
+                        <div
+                          className="w-5 h-5 rounded-full border-2 border-[#073B4C] shadow-[1px_1px_0px_0px_#073B4C]"
+                          style={{ backgroundColor: aiTheme.primary }}
+                          title={`AI Bot: ${aiTheme.name}`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-[#4A4E69] truncate">
+                        {language === 'bn' ? palette.descBn : palette.descEn}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dots & Boxes Grid & Line Colors Customizer */}
+          <div className="p-4 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] flex flex-col gap-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#FFD166] border border-[#073B4C] flex items-center justify-center text-[#073B4C] flex-shrink-0">
+                  <Palette className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-sm font-black text-[#073B4C] block">
+                    {t.dotsGridCustomizerTitle}
+                  </span>
+                  <span className="text-xs font-bold text-[#4A4E69]">
+                    {t.dotsGridCustomizerDesc}
+                  </span>
+                </div>
+              </div>
+
+              {/* Reset to default color button */}
+              {(settings.dotsGridLineColor !== '#073B4C' || settings.dotsPegColor !== '#073B4C') && (
+                <button
+                  onClick={() => {
+                    soundEngine.playTap();
+                    onUpdateSettings({
+                      ...settings,
+                      dotsGridLineColor: '#073B4C',
+                      dotsPegColor: '#073B4C'
+                    });
+                  }}
+                  title={t.resetDefaultColor}
+                  className="p-1.5 rounded-lg bg-slate-100 border border-[#073B4C]/40 text-[#073B4C] hover:bg-slate-200 text-xs font-black flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline text-[11px]">{t.resetDefaultColor}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Live Board Preview & Interactive Pickers */}
+            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[#FFF9F0] border border-[#073B4C]/20">
+              {/* Mini Interactive SVG preview */}
+              <svg viewBox="0 0 76 76" className="w-14 h-14 bg-white rounded-xl border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex-shrink-0">
+                {/* Guide lines */}
+                <line x1="16" y1="16" x2="60" y2="16" stroke={settings.dotsGridLineColor || '#073B4C'} strokeWidth="4" strokeLinecap="round" strokeOpacity="0.4" strokeDasharray="3 2" />
+                <line x1="16" y1="60" x2="60" y2="60" stroke={settings.dotsGridLineColor || '#073B4C'} strokeWidth="4" strokeLinecap="round" strokeOpacity="0.4" strokeDasharray="3 2" />
+                <line x1="16" y1="16" x2="16" y2="60" stroke={settings.dotsGridLineColor || '#073B4C'} strokeWidth="4" strokeLinecap="round" strokeOpacity="0.4" strokeDasharray="3 2" />
+                <line x1="60" y1="16" x2="60" y2="60" stroke={settings.dotsGridLineColor || '#073B4C'} strokeWidth="4" strokeLinecap="round" strokeOpacity="0.4" strokeDasharray="3 2" />
+                {/* Captured sample box in bottom-left/top-left */}
+                <rect x="22" y="22" width="32" height="32" rx="4" fill="#FFD166" fillOpacity="0.35" />
+                {/* 4 dots */}
+                <circle cx="16" cy="16" r="5" fill={settings.dotsPegColor || settings.dotsGridLineColor || '#073B4C'} stroke="#FFFFFF" strokeWidth="1.5" />
+                <circle cx="60" cy="16" r="5" fill={settings.dotsPegColor || settings.dotsGridLineColor || '#073B4C'} stroke="#FFFFFF" strokeWidth="1.5" />
+                <circle cx="16" cy="60" r="5" fill={settings.dotsPegColor || settings.dotsGridLineColor || '#073B4C'} stroke="#FFFFFF" strokeWidth="1.5" />
+                <circle cx="60" cy="60" r="5" fill={settings.dotsPegColor || settings.dotsGridLineColor || '#073B4C'} stroke="#FFFFFF" strokeWidth="1.5" />
+              </svg>
+
+              {/* Custom Color Input Pickers */}
+              <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                {/* Line Color Picker */}
+                <div className="flex-1 flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-white border border-[#073B4C]/30">
+                  <span className="text-[11px] font-bold text-[#073B4C] truncate">
+                    {t.dotsLineColor}:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="color"
+                      value={settings.dotsGridLineColor || '#073B4C'}
+                      onChange={(e) => {
+                        onUpdateSettings({ ...settings, dotsGridLineColor: e.target.value });
+                      }}
+                      className="w-6 h-6 rounded-md cursor-pointer border border-[#073B4C] p-0 bg-transparent"
+                    />
+                    <span className="text-[10px] font-mono text-[#4A4E69] uppercase font-bold">
+                      {settings.dotsGridLineColor || '#073B4C'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dot/Peg Color Picker */}
+                <div className="flex-1 flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-white border border-[#073B4C]/30">
+                  <span className="text-[11px] font-bold text-[#073B4C] truncate">
+                    {t.dotsDotColor}:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="color"
+                      value={settings.dotsPegColor || '#073B4C'}
+                      onChange={(e) => {
+                        onUpdateSettings({ ...settings, dotsPegColor: e.target.value });
+                      }}
+                      className="w-6 h-6 rounded-md cursor-pointer border border-[#073B4C] p-0 bg-transparent"
+                    />
+                    <span className="text-[10px] font-mono text-[#4A4E69] uppercase font-bold">
+                      {settings.dotsPegColor || '#073B4C'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Color Theme Presets */}
+            <div>
+              <span className="text-[11px] font-bold text-[#4A4E69] mb-1.5 block">
+                {t.presetPalette}:
+              </span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {GRID_COLOR_PRESETS.map((preset) => {
+                  const isSelected =
+                    (settings.dotsGridLineColor || '#073B4C').toLowerCase() === preset.lineColor.toLowerCase() &&
+                    (settings.dotsPegColor || '#073B4C').toLowerCase() === preset.dotColor.toLowerCase();
+
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        soundEngine.playTap();
+                        if (settings.hapticsEnabled) hapticsEngine.trigger('tap');
+                        onUpdateSettings({
+                          ...settings,
+                          dotsGridLineColor: preset.lineColor,
+                          dotsPegColor: preset.dotColor
+                        });
+                      }}
+                      className={`p-1.5 rounded-xl border-2 flex items-center gap-1.5 transition-all text-left ${
+                        isSelected
+                          ? 'border-[#073B4C] bg-white shadow-[2px_2px_0px_0px_#073B4C]'
+                          : 'border-transparent bg-white/70 hover:bg-white hover:border-[#073B4C]/30'
+                      }`}
+                    >
+                      <div
+                        className="w-4 h-4 rounded-full border border-[#073B4C] flex-shrink-0 flex items-center justify-center text-white"
+                        style={{ backgroundColor: preset.lineColor }}
+                      >
+                        {isSelected && <Check className="w-2.5 h-2.5" />}
+                      </div>
+                      <span className="text-[10px] font-bold text-[#073B4C] truncate leading-tight">
+                        {language === 'bn' ? preset.nameBn : preset.nameEn}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Reset Local Data with Dialog */}

@@ -10,7 +10,7 @@ import { TRANSLATIONS } from '../i18n/translations';
 import { AvatarIcon } from './AvatarIcon';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
-import { RotateCcw, Home, Grid, Trophy, Frown, Sparkles } from 'lucide-react';
+import { RotateCcw, Home, Grid, Trophy, Frown, Sparkles, Play } from 'lucide-react';
 
 interface GameResultModalProps {
   status: GameStatus;
@@ -19,7 +19,9 @@ interface GameResultModalProps {
   onPlayAgain: () => void;
   onGoHome: () => void;
   onOpenBoardPicker: () => void;
+  onReplayWinningMove?: () => void;
   moveCount: number;
+  customScoreText?: string;
   isOnlineMatch?: boolean;
   onRematch?: () => void;
   rematchRequested?: boolean;
@@ -32,7 +34,9 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
   onPlayAgain,
   onGoHome,
   onOpenBoardPicker,
+  onReplayWinningMove,
   moveCount,
+  customScoreText,
   isOnlineMatch = false,
   onRematch,
   rematchRequested = false
@@ -93,9 +97,9 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
                 {winner.name} {t.victory}
               </h2>
               <p className="text-xs font-bold text-[#4A4E69] mt-1">
-                {language === 'bn'
+                {customScoreText || (language === 'bn'
                   ? `${moveCount} চালে চমৎকার বিজয় অর্জিত হয়েছে!`
-                  : `Secured glorious victory in ${moveCount} moves!`}
+                  : `Secured glorious victory in ${moveCount} moves!`)}
               </p>
             </div>
           </>
@@ -113,9 +117,9 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
                 {t.draw}
               </h2>
               <p className="text-xs font-bold text-[#4A4E69] mt-1">
-                {language === 'bn'
+                {customScoreText || (language === 'bn'
                   ? 'উভয় খেলোয়াড়ই সমান লড়াই করেছেন!'
-                  : 'Well matched battle! Both played skillfully.'}
+                  : 'Well matched battle! Both played skillfully.')}
               </p>
             </div>
           </>
@@ -123,6 +127,22 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-2.5 w-full z-10 mt-2">
+          {/* Replay Winning Move (when won) */}
+          {status === 'won' && onReplayWinningMove && (
+            <button
+              id="btn-replay-winning-move-modal"
+              onClick={() => {
+                soundEngine.playWinningMoveReplay();
+                hapticsEngine.trigger('heavy');
+                onReplayWinningMove();
+              }}
+              className="w-full py-3 rounded-2xl bg-[#FFD166] hover:bg-amber-300 border-3 border-[#073B4C] text-[#073B4C] font-black text-sm shadow-[4px_4px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2"
+            >
+              <Play className="w-4 h-4 fill-[#073B4C]" />
+              <span>{language === 'bn' ? 'বিজয়ী চাল আবার দেখুন' : 'Replay Winning Move'}</span>
+            </button>
+          )}
+
           {/* Primary: Play Again / Rematch */}
           {isOnlineMatch && onRematch ? (
             <button

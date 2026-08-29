@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { PlayerTheme } from '../types';
+import { PlayerTheme, TokenColorPalette } from '../types';
 
 export const PLAYER_THEMES: Record<string, PlayerTheme> = {
   coral: {
@@ -65,8 +65,91 @@ export const PLAYER_THEMES: Record<string, PlayerTheme> = {
     shadow: '#FF8C61',
     border: 'border-[#FF8C61]',
     text: 'text-[#FF8C61]'
+  },
+  rose: {
+    id: 'rose',
+    name: 'রুবি গোলাপ (Ruby Rose)',
+    gradient: 'from-[#E63946] to-[#b81d2c]',
+    primary: '#E63946',
+    accent: '#ff6b77',
+    shadow: '#E63946',
+    border: 'border-[#E63946]',
+    text: 'text-[#E63946]'
+  },
+  indigo: {
+    id: 'indigo',
+    name: 'গাঢ় নীল (Deep Indigo)',
+    gradient: 'from-[#4361EE] to-[#2b44c4]',
+    primary: '#4361EE',
+    accent: '#738aff',
+    shadow: '#4361EE',
+    border: 'border-[#4361EE]',
+    text: 'text-[#4361EE]'
   }
 };
+
+export const TOKEN_COLOR_PALETTES: TokenColorPalette[] = [
+  {
+    id: 'classic-duo',
+    nameBn: 'ক্লাসিক নিও (কোরাল ও সাগর)',
+    nameEn: 'Classic Neo (Coral & Ocean)',
+    descBn: 'জনপ্রিয় উজ্জ্বল গোলাপী ও শান্ত নীল',
+    descEn: 'Vibrant Coral & Ocean Blue pairing',
+    p1Theme: 'coral',
+    p2Theme: 'blue',
+    aiTheme: 'purple'
+  },
+  {
+    id: 'emerald-gold',
+    nameBn: 'পান্না ও সোনালী রোদ',
+    nameEn: 'Emerald & Gold',
+    descBn: 'প্রাকৃতিক সবুজ ও রাজকীয় সোনালী',
+    descEn: 'Fresh Teal & Royal Gold dynamic',
+    p1Theme: 'emerald',
+    p2Theme: 'amber',
+    aiTheme: 'orange'
+  },
+  {
+    id: 'sunset-blaze',
+    nameBn: 'সূর্যাস্ত আভা (কমলা ও ভায়োলেট)',
+    nameEn: 'Sunset Blaze (Tangerine & Violet)',
+    descBn: 'উষ্ণ কমলা ও তীব্র বেগুনি বৈপরীত্য',
+    descEn: 'Fiery Orange & Deep Violet contrast',
+    p1Theme: 'orange',
+    p2Theme: 'purple',
+    aiTheme: 'coral'
+  },
+  {
+    id: 'cyber-neon',
+    nameBn: 'সাইবার নিয়ন (ভায়োলেট ও পান্না)',
+    nameEn: 'Cyber Neon (Violet & Teal)',
+    descBn: 'আধুনিক ভবিষ্যৎমুখী গ্লোয়িং কালার',
+    descEn: 'Futuristic High-Contrast Luminescence',
+    p1Theme: 'purple',
+    p2Theme: 'emerald',
+    aiTheme: 'blue'
+  },
+  {
+    id: 'ruby-sapphire',
+    nameBn: 'রুবি ও রত্ন নীল',
+    nameEn: 'Ruby & Sapphire',
+    descBn: 'গাঢ় রুবি লাল ও রাজকীয় নীল',
+    descEn: 'Intense Ruby Red & Deep Indigo',
+    p1Theme: 'rose',
+    p2Theme: 'indigo',
+    aiTheme: 'amber'
+  },
+  {
+    id: 'ocean-sunrise',
+    nameBn: 'সাগর ও প্রভাত (নীল ও কমলা)',
+    nameEn: 'Ocean & Sunrise',
+    descBn: 'সাগরের নীল ও ভোরের সূর্য কমলা',
+    descEn: 'Crisp Azure Blue & Sunrise Orange',
+    p1Theme: 'blue',
+    p2Theme: 'orange',
+    aiTheme: 'emerald'
+  }
+];
 
 export interface AvatarOption {
   id: string;

@@ -84,6 +84,60 @@ class SoundEngine {
     osc2.stop(now + 0.15);
   }
 
+  public playDiscDrop(colOrIsP2?: number | boolean, maxCols?: number, isPlayer2?: boolean) {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    let col = 3;
+    let totalCols = 7;
+    let isP2 = false;
+
+    if (typeof colOrIsP2 === 'boolean') {
+      isP2 = colOrIsP2;
+    } else if (typeof colOrIsP2 === 'number') {
+      col = colOrIsP2;
+      if (typeof maxCols === 'number') totalCols = maxCols;
+      if (typeof isPlayer2 === 'boolean') isP2 = isPlayer2;
+    }
+
+    // Dynamic pitch based on column drop
+    const colPitchRatio = 0.9 + (col / Math.max(1, totalCols - 1)) * 0.25;
+    const baseFreq = (isP2 ? 320 : 480) * colPitchRatio;
+    const now = this.ctx.currentTime;
+
+    // First impact
+    const osc1 = this.ctx.createOscillator();
+    const gain1 = this.ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(baseFreq * 1.6, now);
+    osc1.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, now + 0.08);
+
+    gain1.gain.setValueAtTime(this.volume * 0.45, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    osc1.connect(gain1);
+    gain1.connect(this.ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.1);
+
+    // Second subtle bounce click
+    const osc2 = this.ctx.createOscillator();
+    const gain2 = this.ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(baseFreq * 1.2, now + 0.05);
+    osc2.frequency.exponentialRampToValueAtTime(baseFreq * 0.8, now + 0.13);
+
+    gain2.gain.setValueAtTime(0.001, now);
+    gain2.gain.setValueAtTime(this.volume * 0.3, now + 0.05);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    osc2.connect(gain2);
+    gain2.connect(this.ctx.destination);
+    osc2.start(now + 0.05);
+    osc2.stop(now + 0.15);
+  }
+
   public playTurn() {
     if (!this.enabled) return;
     this.initContext();
@@ -218,6 +272,33 @@ class SoundEngine {
     this.playCountdown(0);
   }
 
+  public playBoxCapture() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 major arpeggio
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const time = now + idx * 0.05;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, time);
+
+      gain.gain.setValueAtTime(this.volume * 0.35, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(time);
+      osc.stop(time + 0.18);
+    });
+  }
+
   public playRoomJoin() {
     if (!this.enabled) return;
     this.initContext();
@@ -241,6 +322,63 @@ class SoundEngine {
 
       osc.start(time);
       osc.stop(time + 0.2);
+    });
+  }
+
+  public playAchievement() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    // Celebratory triumph chime: C5, E5, G5, B5, C6 with harmonics
+    const notes = [523.25, 659.25, 783.99, 987.77, 1046.5];
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const time = now + idx * 0.08;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, time);
+
+      gain.gain.setValueAtTime(0.001, time);
+      gain.gain.linearRampToValueAtTime(this.volume * 0.5, time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.45);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(time);
+      osc.stop(time + 0.48);
+    });
+  }
+
+  public playWinningMoveReplay() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const notes = [440, 554.37, 659.25, 880]; // A4, C#5, E5, A5 fanfare
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const time = now + idx * 0.07;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time);
+
+      gain.gain.setValueAtTime(0.001, time);
+      gain.gain.linearRampToValueAtTime(this.volume * 0.4, time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(time);
+      osc.stop(time + 0.38);
     });
   }
 }

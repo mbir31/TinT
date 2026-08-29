@@ -5,14 +5,21 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
+  GameType,
   GameMode,
   AIDifficulty,
   BoardConfig,
+  DotsBoardConfig,
+  ConnectFourConfig,
   GameState,
+  DotsGameState,
+  ConnectFourGameState,
+  DotsLine,
   Player,
   RoomState,
   UserSettings,
-  CellCoord
+  CellCoord,
+  AchievementToastItem
 } from './types';
 import {
   loadUserSettings,
@@ -21,13 +28,30 @@ import {
   loadActiveLocalGame
 } from './engine/storage';
 import {
+  recordGameWinAndCheckAchievements,
+  recordGameLossOrDraw
+} from './engine/achievements';
+import {
   createInitialGameState,
   isValidMove,
   makeMove,
   checkWin,
   isBoardFull
 } from './engine/gameEngine';
+import {
+  createInitialDotsState,
+  makeDotsMove,
+  DOTS_PRESETS
+} from './engine/dotsEngine';
+import {
+  createInitialConnectFourState,
+  makeConnectFourDrop,
+  getConnectFourAIMove,
+  CONNECT_FOUR_PRESETS,
+  DEFAULT_CONNECT_FOUR_CONFIG
+} from './engine/connectFourEngine';
 import { calculateAIMove } from './engine/aiEngine';
+import { calculateDotsAIMove } from './engine/dotsAiEngine';
 import {
   createOnlineRoom,
   joinOnlineRoom,
@@ -46,19 +70,25 @@ import { BOARD_PRESETS } from './constants/themes';
 import { Header } from './components/Header';
 import { ModeSelection } from './components/ModeSelection';
 import { GameBoard } from './components/GameBoard';
+import { DotsGameBoard } from './components/DotsGameBoard';
+import { ConnectFourBoard } from './components/ConnectFourBoard';
 import { PlayerBadge } from './components/PlayerBadge';
 import { TurnIndicator } from './components/TurnIndicator';
 import { BoardSelection } from './components/BoardSelection';
+import { DotsBoardSelection } from './components/DotsBoardSelection';
+import { ConnectFourBoardSelection } from './components/ConnectFourBoardSelection';
 import { PlayerCustomizer } from './components/PlayerCustomizer';
 import { SettingsModal } from './components/SettingsModal';
 import { GameResultModal } from './components/GameResultModal';
+import { WinningMoveBanner } from './components/WinningMoveBanner';
+import { AchievementToast } from './components/AchievementToast';
 import { OnlineLobby } from './components/OnlineLobby';
 import { OnlineReactions, FloatingReaction } from './components/OnlineReactions';
 import { CountdownOverlay } from './components/CountdownOverlay';
 import { InstallPrompt } from './components/InstallPrompt';
 import { FooterCredit } from './components/FooterCredit';
 import { LocalSetupModal } from './components/LocalSetupModal';
-import { RotateCcw, ArrowLeft, SlidersHorizontal, UserCheck, Sparkles, AlertTriangle } from 'lucide-react';
+import { RotateCcw, ArrowLeft, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 
 type ScreenView = 'mode-select' | 'online-lobby' | 'playing';
 
@@ -72,20 +102,31 @@ export default function App() {
     return loaded;
   });
 
-  // 2. Navigation State
+  // 2. Active Game Selector ('tictactoe' | 'dotsboxes' | 'connectfour')
+  const [activeGame, setActiveGame] = useState<GameType>(settings.activeGameType || 'tictactoe');
+
+  // 3. Navigation State
   const [currentView, setCurrentView] = useState<ScreenView>('mode-select');
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showBoardModal, setShowBoardModal] = useState<boolean>(false);
+  const [showDotsBoardModal, setShowDotsBoardModal] = useState<boolean>(false);
+  const [showC4BoardModal, setShowC4BoardModal] = useState<boolean>(false);
   const [showCustomizerModal, setShowCustomizerModal] = useState<boolean>(false);
   const [showLocalSetupModal, setShowLocalSetupModal] = useState<boolean>(false);
   const [showCountdown, setShowCountdown] = useState<boolean>(false);
 
-  // 3. Match Config State
+  // 4. Match Config State
   const [boardConfig, setBoardConfig] = useState<BoardConfig>(settings.lastBoardConfig);
+  const [dotsConfig, setDotsConfig] = useState<DotsBoardConfig>(
+    settings.lastDotsConfig || { dotRows: 4, dotCols: 4, presetKey: 'classic-3x3' }
+  );
+  const [c4Config, setC4Config] = useState<ConnectFourConfig>(
+    settings.lastConnectFourConfig || DEFAULT_CONNECT_FOUR_CONFIG
+  );
   const [difficulty, setDifficulty] = useState<AIDifficulty>(settings.defaultDifficulty);
   const [activeMode, setActiveMode] = useState<GameMode>('local');
 
-  // 4. Players
+  // 5. Players
   const [player1, setPlayer1] = useState<Player>({
     id: 'p1',
     name: settings.defaultPlayer1.name,
@@ -114,17 +155,36 @@ export default function App() {
     score: 0
   });
 
-  // 5. Game State
+  // 6. Game State (Tic Tac Toe)
   const [gameState, setGameState] = useState<GameState>(() => {
     const saved = loadActiveLocalGame();
     if (saved) return saved;
     return createInitialGameState([player1, player2], boardConfig, 'local');
   });
 
+  // 7. Game State (Dots & Boxes)
+  const [dotsGameState, setDotsGameState] = useState<DotsGameState>(() => {
+    return createInitialDotsState([player1, player2], dotsConfig, 'local');
+  });
+
+  // 8. Game State (Connect Four)
+  const [c4GameState, setC4GameState] = useState<ConnectFourGameState>(() => {
+    return createInitialConnectFourState(c4Config, player1, player2, 'local');
+  });
+
   const [lastMoveCoord, setLastMoveCoord] = useState<CellCoord | null>(null);
   const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
+  const [isDotsAiThinking, setIsDotsAiThinking] = useState<boolean>(false);
+  const [isC4AiThinking, setIsC4AiThinking] = useState<boolean>(false);
 
-  // 6. Online Multiplayer State
+  // 9. Achievements & Winning Move Replay State
+  const [achievementToasts, setAchievementToasts] = useState<AchievementToastItem[]>([]);
+  const [isReplayingWinningMove, setIsReplayingWinningMove] = useState<boolean>(false);
+  const [isResultModalDismissedForReplay, setIsResultModalDismissedForReplay] = useState<boolean>(false);
+  const [winningMoveCoord, setWinningMoveCoord] = useState<CellCoord | null>(null);
+  const [winningDotsLine, setWinningDotsLine] = useState<DotsLine | null>(null);
+
+  // 10. Online Multiplayer State
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [isOnlineWaiting, setIsOnlineWaiting] = useState<boolean>(false);
@@ -148,10 +208,49 @@ export default function App() {
 
   const t = TRANSLATIONS[settings.language];
 
-  // Helper for saving settings
+  // Helper for saving settings & dynamically updating token colors
   const handleUpdateSettings = (newSettings: UserSettings) => {
     setSettings(newSettings);
     saveUserSettings(newSettings);
+
+    // If token color palette / player colors changed, dynamically synchronize active players and games
+    const p1Color = newSettings.defaultPlayer1.colorKey;
+    const p2Color = newSettings.defaultPlayer2.colorKey;
+    const aiColor = newSettings.defaultAIPlayer.colorKey;
+
+    setPlayer1((prev) => ({ ...prev, colorKey: p1Color }));
+    setPlayer2((prev) => ({ ...prev, colorKey: p2Color }));
+    setAiPlayer((prev) => ({ ...prev, colorKey: aiColor }));
+
+    setGameState((prev) => ({
+      ...prev,
+      players: prev.players.map((p) => {
+        if (p.id === 'p1' || p.id === player1.id) return { ...p, colorKey: p1Color };
+        if (p.id === 'ai' || p.isAI) return { ...p, colorKey: aiColor };
+        if (p.id === 'p2' || p.id === player2.id) return { ...p, colorKey: p2Color };
+        return p;
+      }) as [Player, Player]
+    }));
+
+    setDotsGameState((prev) => ({
+      ...prev,
+      players: prev.players.map((p) => {
+        if (p.id === 'p1' || p.id === player1.id) return { ...p, colorKey: p1Color };
+        if (p.id === 'ai' || p.isAI) return { ...p, colorKey: aiColor };
+        if (p.id === 'p2' || p.id === player2.id) return { ...p, colorKey: p2Color };
+        return p;
+      }) as [Player, Player]
+    }));
+
+    setC4GameState((prev) => ({
+      ...prev,
+      players: prev.players.map((p) => {
+        if (p.id === 'p1' || p.id === player1.id) return { ...p, colorKey: p1Color };
+        if (p.id === 'ai' || p.isAI) return { ...p, colorKey: aiColor };
+        if (p.id === 'p2' || p.id === player2.id) return { ...p, colorKey: p2Color };
+        return p;
+      }) as [Player, Player]
+    }));
   };
 
   const handleToggleLanguage = () => {
@@ -168,11 +267,101 @@ export default function App() {
 
   // Helper for Board Label
   const getBoardPresetLabel = (): string => {
+    if (activeGame === 'connectfour') {
+      if (c4Config.presetKey) {
+        const preset = CONNECT_FOUR_PRESETS.find((p) => p.key === c4Config.presetKey);
+        if (preset) return settings.language === 'bn' ? preset.nameBn : preset.nameEn;
+      }
+      return `${c4Config.cols}×${c4Config.rows} (${settings.language === 'bn' ? '৪-মিলান' : '4-in-a-Row'})`;
+    }
+
+    if (activeGame === 'dotsboxes') {
+      if (dotsConfig.presetKey && DOTS_PRESETS[dotsConfig.presetKey]) {
+        const preset = DOTS_PRESETS[dotsConfig.presetKey];
+        return settings.language === 'bn' ? preset.labelBn : preset.labelEn;
+      }
+      const bRows = dotsConfig.dotRows - 1;
+      const bCols = dotsConfig.dotCols - 1;
+      return `${bRows}×${bCols} ${settings.language === 'bn' ? 'বক্স' : 'Boxes'}`;
+    }
+
     if (boardConfig.presetKey) {
       const preset = BOARD_PRESETS.find((p) => p.id === boardConfig.presetKey);
       if (preset) return settings.language === 'bn' ? preset.labelBn : preset.labelEn;
     }
     return `${boardConfig.rows}x${boardConfig.cols} (${settings.language === 'bn' ? 'জিততে ' : 'Win '}${boardConfig.winLength})`;
+  };
+
+  // Helper for Achievement Toasts
+  const triggerAchievementCheck = useCallback(
+    (
+      winner: Player,
+      gameType: GameType,
+      mode: GameMode,
+      diff?: AIDifficulty,
+      boxesCaptured?: number
+    ) => {
+      const { newAchievements } = recordGameWinAndCheckAchievements(
+        winner,
+        gameType,
+        mode,
+        diff,
+        boxesCaptured
+      );
+
+      if (newAchievements.length > 0) {
+        soundEngine.playAchievement();
+        const newItems: AchievementToastItem[] = newAchievements.map((ach) => ({
+          id: `${ach.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          achievement: ach,
+          unlockedAt: Date.now()
+        }));
+
+        setAchievementToasts((prev) => [...prev, ...newItems]);
+
+        newItems.forEach((item) => {
+          setTimeout(() => {
+            setAchievementToasts((current) => current.filter((t) => t.id !== item.id));
+          }, 5500);
+        });
+      }
+    },
+    []
+  );
+
+  const handleDismissToast = (id: string) => {
+    setAchievementToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Replay Winning Move Actions
+  const handleReplayWinningMove = () => {
+    setIsResultModalDismissedForReplay(true);
+    setIsReplayingWinningMove(true);
+    soundEngine.playWinningMoveReplay();
+    setTimeout(() => {
+      setIsReplayingWinningMove(false);
+    }, 2400);
+  };
+
+  const handleReplayWinningMoveAgain = () => {
+    setIsReplayingWinningMove(true);
+    soundEngine.playWinningMoveReplay();
+    setTimeout(() => {
+      setIsReplayingWinningMove(false);
+    }, 2400);
+  };
+
+  const handleOpenResultsModal = () => {
+    setIsResultModalDismissedForReplay(false);
+  };
+
+  // Handle Game Type Switch
+  const handleSelectGame = (game: GameType) => {
+    setActiveGame(game);
+    handleUpdateSettings({
+      ...settings,
+      activeGameType: game
+    });
   };
 
   // ----------------------------------------------------
@@ -201,11 +390,35 @@ export default function App() {
     if (mode === 'local') {
       const p1 = { ...player1 };
       const p2 = { ...player2, isAI: false };
-      startNewGameWithPlayers('local', p1, p2, boardConfig);
+      if (activeGame === 'connectfour') {
+        const newC4 = createInitialConnectFourState(c4Config, p1, p2, 'local');
+        setC4GameState(newC4);
+        setIsC4AiThinking(false);
+        setShowCountdown(true);
+      } else if (activeGame === 'dotsboxes') {
+        const newDots = createInitialDotsState([p1, p2], dotsConfig, 'local');
+        setDotsGameState(newDots);
+        setIsDotsAiThinking(false);
+        setShowCountdown(true);
+      } else {
+        startNewGameWithPlayers('local', p1, p2, boardConfig);
+      }
     } else if (mode === 'ai') {
       const p1 = { ...player1 };
       const p2 = { ...aiPlayer, isAI: true };
-      startNewGameWithPlayers('ai', p1, p2, boardConfig, diff || difficulty);
+      if (activeGame === 'connectfour') {
+        const newC4 = createInitialConnectFourState(c4Config, p1, p2, 'ai', diff || difficulty);
+        setC4GameState(newC4);
+        setIsC4AiThinking(false);
+        setShowCountdown(true);
+      } else if (activeGame === 'dotsboxes') {
+        const newDots = createInitialDotsState([p1, p2], dotsConfig, 'ai', diff || difficulty);
+        setDotsGameState(newDots);
+        setIsDotsAiThinking(false);
+        setShowCountdown(true);
+      } else {
+        startNewGameWithPlayers('ai', p1, p2, boardConfig, diff || difficulty);
+      }
     } else if (mode === 'online') {
       setCurrentView('online-lobby');
       setOnlineError(null);
@@ -255,20 +468,273 @@ export default function App() {
 
     setShowLocalSetupModal(false);
     setActiveMode('local');
-    startNewGameWithPlayers('local', updatedP1, updatedP2, boardConfig);
+
+    if (activeGame === 'connectfour') {
+      const newC4 = createInitialConnectFourState(c4Config, updatedP1, updatedP2, 'local');
+      setC4GameState(newC4);
+      setIsC4AiThinking(false);
+      setShowCountdown(true);
+    } else if (activeGame === 'dotsboxes') {
+      const newDots = createInitialDotsState([updatedP1, updatedP2], dotsConfig, 'local');
+      setDotsGameState(newDots);
+      setIsDotsAiThinking(false);
+      setShowCountdown(true);
+    } else {
+      startNewGameWithPlayers('local', updatedP1, updatedP2, boardConfig);
+    }
   };
 
   const handleCountdownComplete = () => {
     setShowCountdown(false);
     setCurrentView('playing');
-    setGameState((prev) => ({
-      ...prev,
-      status: 'playing'
-    }));
+    if (activeGame === 'connectfour') {
+      setC4GameState((prev) => ({
+        ...prev,
+        status: 'playing'
+      }));
+    } else if (activeGame === 'dotsboxes') {
+      setDotsGameState((prev) => ({
+        ...prev,
+        status: 'playing'
+      }));
+    } else {
+      setGameState((prev) => ({
+        ...prev,
+        status: 'playing'
+      }));
+    }
   };
 
   // ----------------------------------------------------
-  // Move Execution Engine
+  // Connect Four Move Execution Engine
+  // ----------------------------------------------------
+  const handleConnectFourDrop = useCallback(
+    (col: number) => {
+      if (c4GameState.status !== 'playing' || isC4AiThinking) return;
+
+      const result = makeConnectFourDrop(c4GameState, col);
+      if (!result) return;
+
+      const currentPlayer = c4GameState.players[c4GameState.currentPlayerIndex];
+      const isP2 = currentPlayer.id === player2.id || currentPlayer.id === aiPlayer.id;
+
+      // Play rich disc drop sound
+      soundEngine.playDiscDrop(col, c4GameState.config.cols, isP2);
+      hapticsEngine.trigger('move');
+
+      if (result.isGameOver) {
+        setIsResultModalDismissedForReplay(false);
+        if (result.nextState.status === 'won') {
+          soundEngine.playWin();
+          hapticsEngine.trigger('win');
+          const winner = result.nextState.players.find(
+            (p) => p.id === result.nextState.winnerPlayerId
+          );
+          if (winner) {
+            triggerAchievementCheck(
+              winner,
+              'connectfour',
+              c4GameState.mode,
+              c4GameState.aiDifficulty
+            );
+
+            // Update scores
+            if (winner.id === player1.id) {
+              setPlayer1((prev) => ({ ...prev, score: prev.score + 1 }));
+            } else if (winner.id === player2.id) {
+              setPlayer2((prev) => ({ ...prev, score: prev.score + 1 }));
+            } else if (winner.id === aiPlayer.id) {
+              setAiPlayer((prev) => ({ ...prev, score: prev.score + 1 }));
+            }
+          }
+        } else {
+          soundEngine.playDraw();
+          hapticsEngine.trigger('draw');
+          recordGameLossOrDraw();
+        }
+      }
+
+      setC4GameState(result.nextState);
+    },
+    [c4GameState, isC4AiThinking, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
+  );
+
+  // Connect Four AI Turn Effect
+  useEffect(() => {
+    if (
+      activeGame === 'connectfour' &&
+      c4GameState.mode === 'ai' &&
+      c4GameState.status === 'playing' &&
+      c4GameState.currentPlayerIndex === 1 &&
+      !isC4AiThinking
+    ) {
+      setIsC4AiThinking(true);
+      const timer = setTimeout(() => {
+        try {
+          const aiCol = getConnectFourAIMove(
+            c4GameState.board,
+            c4GameState.config,
+            c4GameState.aiDifficulty || difficulty,
+            aiPlayer.id,
+            player1.id
+          );
+
+          const result = makeConnectFourDrop(c4GameState, aiCol);
+          if (result) {
+            soundEngine.playDiscDrop(aiCol, c4GameState.config.cols, true);
+            hapticsEngine.trigger('move');
+
+            if (result.isGameOver) {
+              setIsResultModalDismissedForReplay(false);
+              if (result.nextState.status === 'won') {
+                soundEngine.playWin();
+                hapticsEngine.trigger('win');
+                const winner = result.nextState.players.find(
+                  (p) => p.id === result.nextState.winnerPlayerId
+                );
+                if (winner && !winner.isAI) {
+                  triggerAchievementCheck(
+                    winner,
+                    'connectfour',
+                    'ai',
+                    c4GameState.aiDifficulty || difficulty
+                  );
+                } else if (winner && winner.isAI) {
+                  setAiPlayer((prev) => ({ ...prev, score: prev.score + 1 }));
+                  recordGameLossOrDraw();
+                }
+              } else {
+                soundEngine.playDraw();
+                hapticsEngine.trigger('draw');
+                recordGameLossOrDraw();
+              }
+            }
+
+            setC4GameState(result.nextState);
+          }
+        } finally {
+          setIsC4AiThinking(false);
+        }
+      }, 450);
+
+      return () => clearTimeout(timer);
+    }
+  }, [activeGame, c4GameState, isC4AiThinking, difficulty, player1.id, aiPlayer.id, triggerAchievementCheck]);
+
+  // ----------------------------------------------------
+  // Dots & Boxes Move Execution Engine
+  // ----------------------------------------------------
+  const handleDotsLineClick = useCallback(
+    (line: DotsLine) => {
+      if (dotsGameState.status !== 'playing' || isDotsAiThinking) return;
+
+      const result = makeDotsMove(dotsGameState, line);
+      const currentPlayer = dotsGameState.players[dotsGameState.currentPlayerIndex];
+      const isP2 = currentPlayer.id === player2.id || currentPlayer.id === aiPlayer.id;
+
+      if (result.completedBoxes.length > 0) {
+        soundEngine.playBoxCapture();
+        hapticsEngine.trigger('heavy');
+      } else {
+        soundEngine.playPlace(isP2);
+        hapticsEngine.trigger('move');
+      }
+
+      if (result.isGameOver) {
+        setWinningDotsLine(line);
+        setIsResultModalDismissedForReplay(false);
+        if (result.nextState.status === 'won') {
+          soundEngine.playWin();
+          hapticsEngine.trigger('win');
+          const winner = result.nextState.players.find(
+            (p) => p.id === result.nextState.winnerPlayerId
+          );
+          if (winner) {
+            const winnerScore = result.nextState.playerScores[winner.id] || 0;
+            triggerAchievementCheck(
+              winner,
+              'dotsboxes',
+              dotsGameState.mode,
+              dotsGameState.aiDifficulty,
+              winnerScore
+            );
+          }
+        } else {
+          soundEngine.playDraw();
+          hapticsEngine.trigger('draw');
+          recordGameLossOrDraw();
+        }
+      }
+
+      setDotsGameState(result.nextState);
+    },
+    [dotsGameState, isDotsAiThinking, player2.id, aiPlayer.id, triggerAchievementCheck]
+  );
+
+  // Dots AI Turn Effect
+  useEffect(() => {
+    if (
+      activeGame === 'dotsboxes' &&
+      dotsGameState.mode === 'ai' &&
+      dotsGameState.status === 'playing' &&
+      dotsGameState.currentPlayerIndex === 1 &&
+      !isDotsAiThinking
+    ) {
+      setIsDotsAiThinking(true);
+      const timer = setTimeout(() => {
+        try {
+          const move = calculateDotsAIMove(dotsGameState, dotsGameState.aiDifficulty || difficulty);
+          if (move) {
+            const result = makeDotsMove(dotsGameState, move);
+            if (result.completedBoxes.length > 0) {
+              soundEngine.playBoxCapture();
+              hapticsEngine.trigger('heavy');
+            } else {
+              soundEngine.playMove(true);
+              hapticsEngine.trigger('move');
+            }
+
+            if (result.isGameOver) {
+              setWinningDotsLine(move);
+              setIsResultModalDismissedForReplay(false);
+              if (result.nextState.status === 'won') {
+                soundEngine.playWin();
+                hapticsEngine.trigger('win');
+                const winner = result.nextState.players.find(
+                  (p) => p.id === result.nextState.winnerPlayerId
+                );
+                if (winner && !winner.isAI) {
+                  const winnerScore = result.nextState.playerScores[winner.id] || 0;
+                  triggerAchievementCheck(
+                    winner,
+                    'dotsboxes',
+                    'ai',
+                    dotsGameState.aiDifficulty || difficulty,
+                    winnerScore
+                  );
+                } else if (winner && winner.isAI) {
+                  recordGameLossOrDraw();
+                }
+              } else {
+                soundEngine.playDraw();
+                hapticsEngine.trigger('draw');
+                recordGameLossOrDraw();
+              }
+            }
+
+            setDotsGameState(result.nextState);
+          }
+        } finally {
+          setIsDotsAiThinking(false);
+        }
+      }, 450);
+
+      return () => clearTimeout(timer);
+    }
+  }, [activeGame, dotsGameState, isDotsAiThinking, difficulty, triggerAchievementCheck]);
+
+  // ----------------------------------------------------
+  // Tic Tac Toe Move Execution Engine
   // ----------------------------------------------------
   const handleCellClick = useCallback(
     (row: number, col: number) => {
@@ -305,8 +771,17 @@ export default function App() {
         nextStatus = 'won';
         winnerId = currentPlayer.id;
         winningCells = winResult.winningCells;
+        setWinningMoveCoord({ row, col });
+        setIsResultModalDismissedForReplay(false);
         soundEngine.playWin();
         hapticsEngine.trigger('win');
+
+        triggerAchievementCheck(
+          currentPlayer,
+          'tictactoe',
+          gameState.mode,
+          gameState.aiDifficulty
+        );
 
         // Update winner score
         if (currentPlayer.id === player1.id) {
@@ -318,8 +793,10 @@ export default function App() {
         }
       } else if (isBoardFull(newBoard)) {
         nextStatus = 'draw';
+        setIsResultModalDismissedForReplay(false);
         soundEngine.playDraw();
         hapticsEngine.trigger('draw');
+        recordGameLossOrDraw();
       }
 
       const nextPlayerIndex = nextStatus === 'playing' ? (gameState.currentPlayerIndex === 0 ? 1 : 0) : gameState.currentPlayerIndex;
@@ -351,14 +828,13 @@ export default function App() {
         saveActiveLocalGame(updatedGame);
       }
     },
-    [gameState, isAiThinking, localOnlineId, roomCode, player1.id, player2.id, aiPlayer.id]
+    [gameState, isAiThinking, localOnlineId, roomCode, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
 
-  // ----------------------------------------------------
-  // AI Turn Handler
-  // ----------------------------------------------------
+  // Tic Tac Toe AI Turn Handler
   useEffect(() => {
     if (
+      activeGame === 'tictactoe' &&
       gameState.mode === 'ai' &&
       gameState.status === 'playing' &&
       gameState.currentPlayerIndex === 1 &&
@@ -393,9 +869,14 @@ export default function App() {
               nextStatus = 'won';
               winnerId = aiBot.id;
               winningCells = winResult.winningCells;
+              setWinningMoveCoord({ row: move.row, col: move.col });
+              setIsResultModalDismissedForReplay(false);
               setAiPlayer((prev) => ({ ...prev, score: prev.score + 1 }));
+              recordGameLossOrDraw();
             } else if (isBoardFull(newBoard)) {
               nextStatus = 'draw';
+              setIsResultModalDismissedForReplay(false);
+              recordGameLossOrDraw();
             }
 
             const nextGame: GameState = {
@@ -427,7 +908,7 @@ export default function App() {
 
       return () => clearTimeout(timer);
     }
-  }, [gameState, isAiThinking, difficulty]);
+  }, [activeGame, gameState, isAiThinking, difficulty]);
 
   // ----------------------------------------------------
   // Online Multiplayer Room Management
@@ -569,6 +1050,40 @@ export default function App() {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
 
+    setIsReplayingWinningMove(false);
+    setIsResultModalDismissedForReplay(false);
+    setWinningMoveCoord(null);
+    setWinningDotsLine(null);
+
+    if (activeGame === 'connectfour') {
+      const p2 = c4GameState.mode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
+      const newC4 = createInitialConnectFourState(
+        c4Config,
+        player1,
+        p2,
+        c4GameState.mode,
+        c4GameState.aiDifficulty
+      );
+      setC4GameState(newC4);
+      setIsC4AiThinking(false);
+      setShowCountdown(true);
+      return;
+    }
+
+    if (activeGame === 'dotsboxes') {
+      const p2 = dotsGameState.mode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
+      const newDots = createInitialDotsState(
+        [player1, p2],
+        dotsConfig,
+        dotsGameState.mode,
+        dotsGameState.aiDifficulty
+      );
+      setDotsGameState(newDots);
+      setIsDotsAiThinking(false);
+      setShowCountdown(true);
+      return;
+    }
+
     if (gameState.mode === 'online') {
       handleOnlineRematch();
       return;
@@ -589,6 +1104,10 @@ export default function App() {
   const handleGoHome = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
+    setIsReplayingWinningMove(false);
+    setIsResultModalDismissedForReplay(false);
+    setWinningMoveCoord(null);
+    setWinningDotsLine(null);
     if (gameState.mode === 'online') {
       handleLeaveOnline();
     }
@@ -624,8 +1143,36 @@ export default function App() {
       }
     });
 
-    // Also update players in active gameState if exists
+    // Also update players in active gameState
     setGameState((prev) => {
+      const updatedPlayers = prev.players.map((p) => {
+        if (p.id === p1.id) return { ...p, name: p1.name, avatar: p1.avatar, colorKey: p1.colorKey, photoUrl: p1.photoUrl };
+        if (p.id === p2.id) return { ...p, name: p2.name, avatar: p2.avatar, colorKey: p2.colorKey, photoUrl: p2.photoUrl };
+        if (p.id === ai.id) return { ...p, name: ai.name, avatar: ai.avatar, colorKey: ai.colorKey, photoUrl: ai.photoUrl };
+        return p;
+      });
+      return {
+        ...prev,
+        players: updatedPlayers
+      };
+    });
+
+    // Update in dotsGameState
+    setDotsGameState((prev) => {
+      const updatedPlayers = prev.players.map((p) => {
+        if (p.id === p1.id) return { ...p, name: p1.name, avatar: p1.avatar, colorKey: p1.colorKey, photoUrl: p1.photoUrl };
+        if (p.id === p2.id) return { ...p, name: p2.name, avatar: p2.avatar, colorKey: p2.colorKey, photoUrl: p2.photoUrl };
+        if (p.id === ai.id) return { ...p, name: ai.name, avatar: ai.avatar, colorKey: ai.colorKey, photoUrl: ai.photoUrl };
+        return p;
+      });
+      return {
+        ...prev,
+        players: updatedPlayers
+      };
+    });
+
+    // Update in c4GameState
+    setC4GameState((prev) => {
       const updatedPlayers = prev.players.map((p) => {
         if (p.id === p1.id) return { ...p, name: p1.name, avatar: p1.avatar, colorKey: p1.colorKey, photoUrl: p1.photoUrl };
         if (p.id === p2.id) return { ...p, name: p2.name, avatar: p2.avatar, colorKey: p2.colorKey, photoUrl: p2.photoUrl };
@@ -639,19 +1186,70 @@ export default function App() {
     });
   };
 
-  // Save board config
+  // Save board configs
   const handleSelectBoardConfig = (config: BoardConfig) => {
     setBoardConfig(config);
     handleUpdateSettings({
       ...settings,
       lastBoardConfig: config
     });
+    if (currentView === 'playing' && activeGame === 'tictactoe') {
+      const p2 = activeMode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
+      startNewGameWithPlayers(activeMode, player1, p2, config, activeMode === 'ai' ? difficulty : undefined);
+    }
   };
 
-  const currentTurnPlayer = gameState.players[gameState.currentPlayerIndex] || player1;
-  const winnerPlayer = gameState.winnerPlayerId
-    ? gameState.players.find((p) => p.id === gameState.winnerPlayerId) || null
-    : null;
+  const handleSelectDotsConfig = (config: DotsBoardConfig) => {
+    setDotsConfig(config);
+    handleUpdateSettings({
+      ...settings,
+      lastDotsConfig: config
+    });
+    if (currentView === 'playing' && activeGame === 'dotsboxes') {
+      const p2 = activeMode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
+      const newDots = createInitialDotsState([player1, p2], config, activeMode, activeMode === 'ai' ? difficulty : undefined);
+      setDotsGameState(newDots);
+      setIsDotsAiThinking(false);
+      setShowCountdown(true);
+    }
+  };
+
+  const handleSelectC4Config = (config: ConnectFourConfig) => {
+    setC4Config(config);
+    handleUpdateSettings({
+      ...settings,
+      lastConnectFourConfig: config
+    });
+    if (currentView === 'playing' && activeGame === 'connectfour') {
+      const p2 = activeMode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
+      const newC4 = createInitialConnectFourState(config, player1, p2, activeMode, activeMode === 'ai' ? difficulty : undefined);
+      setC4GameState(newC4);
+      setIsC4AiThinking(false);
+      setShowCountdown(true);
+    }
+  };
+
+  const currentTurnPlayer = activeGame === 'connectfour'
+    ? c4GameState.players[c4GameState.currentPlayerIndex] || player1
+    : activeGame === 'dotsboxes'
+    ? dotsGameState.players[dotsGameState.currentPlayerIndex] || player1
+    : gameState.players[gameState.currentPlayerIndex] || player1;
+
+  const winnerPlayer = activeGame === 'connectfour'
+    ? (c4GameState.winnerPlayerId ? c4GameState.players.find((p) => p.id === c4GameState.winnerPlayerId) || null : null)
+    : activeGame === 'dotsboxes'
+    ? (dotsGameState.winnerPlayerId ? dotsGameState.players.find((p) => p.id === dotsGameState.winnerPlayerId) || null : null)
+    : (gameState.winnerPlayerId ? gameState.players.find((p) => p.id === gameState.winnerPlayerId) || null : null);
+
+  const isC4GameOver = activeGame === 'connectfour' && (c4GameState.status === 'won' || c4GameState.status === 'draw');
+  const isDotsGameOver = activeGame === 'dotsboxes' && (dotsGameState.status === 'won' || dotsGameState.status === 'draw');
+  const isTicTacToeGameOver = activeGame === 'tictactoe' && (gameState.status === 'won' || gameState.status === 'draw');
+
+  const dotsCustomScoreText = activeGame === 'dotsboxes'
+    ? (settings.language === 'bn'
+        ? `${dotsGameState.players[0].name}: ${dotsGameState.playerScores[dotsGameState.players[0].id] || 0} বক্স | ${dotsGameState.players[1].name}: ${dotsGameState.playerScores[dotsGameState.players[1].id] || 0} বক্স`
+        : `${dotsGameState.players[0].name}: ${dotsGameState.playerScores[dotsGameState.players[0].id] || 0} boxes | ${dotsGameState.players[1].name}: ${dotsGameState.playerScores[dotsGameState.players[1].id] || 0} boxes`)
+    : undefined;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FFF9F0] text-[#073B4C] font-sans antialiased selection:bg-[#FFD166] selection:text-[#073B4C] relative overflow-x-hidden">
@@ -680,6 +1278,8 @@ export default function App() {
         {currentView === 'mode-select' && (
           <ModeSelection
             language={settings.language}
+            activeGame={activeGame}
+            onSelectGame={handleSelectGame}
             onSelectMode={handleSelectMode}
             currentDifficulty={difficulty}
             onChangeDifficulty={(diff) => {
@@ -687,7 +1287,15 @@ export default function App() {
               handleUpdateSettings({ ...settings, defaultDifficulty: diff });
             }}
             onOpenCustomizer={() => setShowCustomizerModal(true)}
-            onOpenBoardPicker={() => setShowBoardModal(true)}
+            onOpenBoardPicker={() => {
+              if (activeGame === 'connectfour') {
+                setShowC4BoardModal(true);
+              } else if (activeGame === 'dotsboxes') {
+                setShowDotsBoardModal(true);
+              } else {
+                setShowBoardModal(true);
+              }
+            }}
             boardLabel={getBoardPresetLabel()}
             player1={player1}
             player2={player2}
@@ -735,7 +1343,7 @@ export default function App() {
                   id="btn-edit-players-in-game"
                   onClick={() => {
                     soundEngine.playTap();
-                    if (gameState.mode === 'local') {
+                    if (activeMode === 'local') {
                       setShowLocalSetupModal(true);
                     } else {
                       setShowCustomizerModal(true);
@@ -763,25 +1371,65 @@ export default function App() {
             {/* Players Status & Score HUD */}
             <div className="w-full grid grid-cols-2 gap-2 sm:gap-4 my-0.5 max-w-xl">
               <PlayerBadge
-                player={gameState.players[0]}
-                isCurrentTurn={gameState.currentPlayerIndex === 0 && gameState.status === 'playing'}
-                score={player1.score}
+                player={
+                  activeGame === 'connectfour'
+                    ? c4GameState.players[0]
+                    : activeGame === 'dotsboxes'
+                    ? dotsGameState.players[0]
+                    : gameState.players[0]
+                }
+                isCurrentTurn={
+                  activeGame === 'connectfour'
+                    ? (c4GameState.currentPlayerIndex === 0 && c4GameState.status === 'playing')
+                    : activeGame === 'dotsboxes'
+                    ? (dotsGameState.currentPlayerIndex === 0 && dotsGameState.status === 'playing')
+                    : (gameState.currentPlayerIndex === 0 && gameState.status === 'playing')
+                }
+                score={
+                  activeGame === 'dotsboxes'
+                    ? (dotsGameState.playerScores[dotsGameState.players[0].id] || 0)
+                    : player1.score
+                }
                 language={settings.language}
               />
               <PlayerBadge
-                player={gameState.players[1]}
-                isCurrentTurn={gameState.currentPlayerIndex === 1 && gameState.status === 'playing'}
-                score={gameState.mode === 'ai' ? aiPlayer.score : player2.score}
+                player={
+                  activeGame === 'connectfour'
+                    ? c4GameState.players[1]
+                    : activeGame === 'dotsboxes'
+                    ? dotsGameState.players[1]
+                    : gameState.players[1]
+                }
+                isCurrentTurn={
+                  activeGame === 'connectfour'
+                    ? (c4GameState.currentPlayerIndex === 1 && c4GameState.status === 'playing')
+                    : activeGame === 'dotsboxes'
+                    ? (dotsGameState.currentPlayerIndex === 1 && dotsGameState.status === 'playing')
+                    : (gameState.currentPlayerIndex === 1 && gameState.status === 'playing')
+                }
+                score={
+                  activeGame === 'dotsboxes'
+                    ? (dotsGameState.playerScores[dotsGameState.players[1].id] || 0)
+                    : (activeMode === 'ai' ? aiPlayer.score : player2.score)
+                }
                 language={settings.language}
               />
             </div>
 
             {/* Turn Indicator */}
-            {gameState.status === 'playing' && (
+            {((activeGame === 'connectfour' && c4GameState.status === 'playing') ||
+              (activeGame === 'dotsboxes' && dotsGameState.status === 'playing') ||
+              (activeGame === 'tictactoe' && gameState.status === 'playing')) && (
               <TurnIndicator
                 player={currentTurnPlayer}
                 language={settings.language}
-                isAiThinking={isAiThinking}
+                isAiThinking={
+                  activeGame === 'connectfour'
+                    ? isC4AiThinking
+                    : activeGame === 'dotsboxes'
+                    ? isDotsAiThinking
+                    : isAiThinking
+                }
               />
             )}
 
@@ -805,22 +1453,62 @@ export default function App() {
               </div>
             )}
 
-            {/* Interactive 3D Board */}
-            <GameBoard
-              board={gameState.board}
-              onCellClick={handleCellClick}
-              player1={gameState.players[0]}
-              player2={gameState.players[1]}
-              currentPlayer={currentTurnPlayer}
-              winningCells={gameState.winningCells}
-              lastMove={lastMoveCoord}
-              disabled={gameState.status !== 'playing' || isAiThinking}
-              tiltEnabled={settings.tilt3dEnabled && !settings.reducedMotion}
-              language={settings.language}
-            />
+            {/* Winning Move Replay Floating Banner */}
+            {isResultModalDismissedForReplay && winnerPlayer && (
+              <WinningMoveBanner
+                winner={winnerPlayer}
+                language={settings.language}
+                onReplayAgain={handleReplayWinningMoveAgain}
+                onOpenResultsModal={handleOpenResultsModal}
+                isDotsBoxes={activeGame === 'dotsboxes'}
+              />
+            )}
+
+            {/* Interactive Boards based on activeGame */}
+            {activeGame === 'connectfour' ? (
+              <ConnectFourBoard
+                gameState={c4GameState}
+                onDrop={handleConnectFourDrop}
+                disabled={c4GameState.status !== 'playing' || isC4AiThinking}
+                tiltEnabled={settings.tilt3dEnabled && !settings.reducedMotion}
+                language={settings.language}
+                winningCells={c4GameState.winningCells}
+                lastDrop={c4GameState.lastDrop}
+                isReplayingWinningMove={isReplayingWinningMove}
+              />
+            ) : activeGame === 'dotsboxes' ? (
+              <DotsGameBoard
+                gameState={dotsGameState}
+                onLineClick={handleDotsLineClick}
+                player1={dotsGameState.players[0]}
+                player2={dotsGameState.players[1]}
+                currentPlayer={currentTurnPlayer}
+                disabled={dotsGameState.status !== 'playing' || isDotsAiThinking}
+                language={settings.language}
+                gridLineColor={settings.dotsGridLineColor}
+                dotsPegColor={settings.dotsPegColor}
+                winningLine={winningDotsLine}
+                isReplayingWinningMove={isReplayingWinningMove}
+              />
+            ) : (
+              <GameBoard
+                board={gameState.board}
+                onCellClick={handleCellClick}
+                player1={gameState.players[0]}
+                player2={gameState.players[1]}
+                currentPlayer={currentTurnPlayer}
+                winningCells={gameState.winningCells}
+                lastMove={lastMoveCoord}
+                winningMoveCoord={winningMoveCoord}
+                isReplayingWinningMove={isReplayingWinningMove}
+                disabled={gameState.status !== 'playing' || isAiThinking}
+                tiltEnabled={settings.tilt3dEnabled && !settings.reducedMotion}
+                language={settings.language}
+              />
+            )}
 
             {/* Quick Reactions Bar (Online Mode) */}
-            {gameState.mode === 'online' && (
+            {gameState.mode === 'online' && activeGame === 'tictactoe' && (
               <OnlineReactions
                 onSendReaction={handleSendReaction}
                 floatingReactions={floatingReactions}
@@ -829,6 +1517,13 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Achievement Toast Notifications */}
+      <AchievementToast
+        toasts={achievementToasts}
+        onDismiss={handleDismissToast}
+        language={settings.language}
+      />
 
       {/* Countdown 3-2-1 Overlay */}
       {showCountdown && (
@@ -839,16 +1534,38 @@ export default function App() {
       )}
 
       {/* Game Result Modal (Win / Draw) */}
-      {(gameState.status === 'won' || gameState.status === 'draw') && (
+      {(isC4GameOver || isDotsGameOver || isTicTacToeGameOver) && !isResultModalDismissedForReplay && (
         <GameResultModal
-          status={gameState.status}
+          status={
+            activeGame === 'connectfour'
+              ? c4GameState.status
+              : activeGame === 'dotsboxes'
+              ? dotsGameState.status
+              : gameState.status
+          }
           winner={winnerPlayer}
           language={settings.language}
           onPlayAgain={handlePlayAgain}
           onGoHome={handleGoHome}
-          onOpenBoardPicker={() => setShowBoardModal(true)}
-          moveCount={gameState.moveCount}
-          isOnlineMatch={gameState.mode === 'online'}
+          onReplayWinningMove={winnerPlayer ? handleReplayWinningMove : undefined}
+          onOpenBoardPicker={() => {
+            if (activeGame === 'connectfour') {
+              setShowC4BoardModal(true);
+            } else if (activeGame === 'dotsboxes') {
+              setShowDotsBoardModal(true);
+            } else {
+              setShowBoardModal(true);
+            }
+          }}
+          moveCount={
+            activeGame === 'connectfour'
+              ? c4GameState.moveCount
+              : activeGame === 'dotsboxes'
+              ? dotsGameState.moveCount
+              : gameState.moveCount
+          }
+          customScoreText={dotsCustomScoreText}
+          isOnlineMatch={activeGame === 'tictactoe' && gameState.mode === 'online'}
           onRematch={handleOnlineRematch}
           rematchRequested={Boolean(roomState?.rematchRequestedBy)}
         />
@@ -865,12 +1582,32 @@ export default function App() {
         />
       )}
 
-      {/* Board Preset / Custom Grid Modal */}
+      {/* Board Preset / Custom Grid Modal (Tic Tac Toe) */}
       {showBoardModal && (
         <BoardSelection
           currentConfig={boardConfig}
           onSelectConfig={handleSelectBoardConfig}
           onClose={() => setShowBoardModal(false)}
+          language={settings.language}
+        />
+      )}
+
+      {/* Board Preset / Custom Grid Modal (Dots & Boxes) */}
+      {showDotsBoardModal && (
+        <DotsBoardSelection
+          currentConfig={dotsConfig}
+          onSelectConfig={handleSelectDotsConfig}
+          onClose={() => setShowDotsBoardModal(false)}
+          language={settings.language}
+        />
+      )}
+
+      {/* Board Preset / Custom Grid Modal (Connect Four) */}
+      {showC4BoardModal && (
+        <ConnectFourBoardSelection
+          currentConfig={c4Config}
+          onSelectConfig={handleSelectC4Config}
+          onClose={() => setShowC4BoardModal(false)}
           language={settings.language}
         />
       )}

@@ -4,15 +4,18 @@
  */
 
 import React from 'react';
-import { GameMode, AIDifficulty, Player, Language } from '../types';
+import { GameMode, AIDifficulty, Player, Language, GameType } from '../types';
 import { TRANSLATIONS } from '../i18n/translations';
 import { PLAYER_THEMES } from '../constants/themes';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
+import { GameSelector } from './GameSelector';
 import { Users, Bot, Globe, Sparkles, Zap, Flame, ShieldAlert, Edit3 } from 'lucide-react';
 
 interface ModeSelectionProps {
   language: Language;
+  activeGame: GameType;
+  onSelectGame: (game: GameType) => void;
   onSelectMode: (mode: GameMode, difficulty?: AIDifficulty) => void;
   currentDifficulty: AIDifficulty;
   onChangeDifficulty: (diff: AIDifficulty) => void;
@@ -26,6 +29,8 @@ interface ModeSelectionProps {
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({
   language,
+  activeGame,
+  onSelectGame,
   onSelectMode,
   currentDifficulty,
   onChangeDifficulty,
@@ -40,30 +45,54 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
   const p1Theme = PLAYER_THEMES[player1.colorKey] || PLAYER_THEMES.blue;
   const p2Theme = PLAYER_THEMES[player2.colorKey] || PLAYER_THEMES.coral;
 
+  const isDots = activeGame === 'dotsboxes';
+  const isC4 = activeGame === 'connectfour';
+
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col gap-3.5 sm:gap-5 px-3 sm:px-4 py-2 sm:py-3 select-none">
+    <div className="w-full max-w-xl mx-auto flex flex-col gap-3 sm:gap-4 px-3 sm:px-4 py-2 sm:py-3 select-none">
+      {/* Multi-Game Switcher Tab */}
+      <GameSelector
+        activeGame={activeGame}
+        onSelectGame={onSelectGame}
+        language={language}
+      />
+
       {/* Hero Welcome Card */}
-      <div className="relative bg-white rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] p-4 sm:p-6 text-center shadow-[5px_5px_0px_0px_#073B4C] sm:shadow-[8px_8px_0px_0px_#073B4C] overflow-hidden">
+      <div className="relative bg-white rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] p-4 sm:p-5 text-center shadow-[5px_5px_0px_0px_#073B4C] sm:shadow-[8px_8px_0px_0px_#073B4C] overflow-hidden">
         <div className="absolute -top-6 -right-6 w-20 h-20 bg-[#FFD166] rounded-full border-3 border-[#073B4C] -z-0 opacity-40" />
         <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-[#06D6A0] rounded-full border-3 border-[#073B4C] -z-0 opacity-40" />
 
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#FFD166] border-2 border-[#073B4C] text-[11px] sm:text-xs font-black text-[#073B4C] mb-2 sm:mb-3 shadow-[1.5px_1.5px_0px_0px_#073B4C]">
+          <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#FFD166] border-2 border-[#073B4C] text-[11px] sm:text-xs font-black text-[#073B4C] mb-2 shadow-[1.5px_1.5px_0px_0px_#073B4C]">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{t.appTitle} 3D Experience</span>
+            <span>
+              {isC4
+                ? (language === 'bn' ? 'চার মিলান (Connect 4)' : 'Connect 4 Strategy')
+                : isDots
+                ? (language === 'bn' ? 'খাঁচা ও বিন্দু (Dots & Boxes)' : 'Dots & Boxes Territory')
+                : (language === 'bn' ? 'থ্রিডি টিক-ট্যাক-টো' : '3D Tic-Tac-Toe')}
+            </span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-[#073B4C] tracking-tight leading-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-[#073B4C] tracking-tight leading-tight">
             {language === 'bn' ? 'খেলার মোড বেছে নিন' : 'Choose Game Mode'}
           </h2>
           <p className="text-xs sm:text-sm text-[#4A4E69] font-bold mt-1 max-w-md mx-auto">
-            {language === 'bn'
-              ? '৩x৩ থেকে ১৫x১৫ পর্যন্ত যেকোনো গ্রিডে উপভোগ করুন ত্রিমাত্রিক টিক-ট্যাক-টো'
-              : 'Enjoy 3D Tic-Tac-Toe & Connect 4 across 3x3 to 15x15 grids'}
+            {isC4
+              ? (language === 'bn'
+                  ? 'গ্রিডে ওপর থেকে ঘুঁটি ফেলুন—যেকোনো দিকে ৪টি ঘুঁটি এক লাইনে মেলালেই নিশ্চিত জয়!'
+                  : 'Drop discs into the rack—connect 4 of your tokens in any direction to win!')
+              : isDots
+              ? (language === 'bn'
+                  ? 'ডট সংযুক্ত করে লাইন টানুন, ৪টি বাহু দিয়ে খাঁচা দখল করুন ও ফ্রি বোনাস চাল নিন!'
+                  : 'Connect dots to capture boxes and get extra bonus turns!')
+              : (language === 'bn'
+                  ? '৩x৩ থেকে ১৫x১৫ পর্যন্ত যেকোনো গ্রিডে উপভোগ করুন ত্রিমাত্রিক টিক-ট্যাক-টো'
+                  : 'Enjoy 3D Tic-Tac-Toe & Four-in-a-Row across 3x3 to 15x15 grids')}
           </p>
 
           {/* Quick Board & Customizer Action Bar */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t-2 border-[#073B4C]/10">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-3 pt-3 border-t-2 border-[#073B4C]/10">
             <button
               id="btn-board-preset-picker"
               onClick={() => {
@@ -88,13 +117,13 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl sm:rounded-2xl bg-[#FFF9F0] border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] hover:bg-amber-100 active:translate-x-0.5 active:translate-y-0.5 transition-all"
             >
-              <span>🎨 {t.customizerTitle}</span>
+              <span>🎨 {t.customizePlayers || 'Player Customizer'}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mode 1: Local 2 Player (With Direct Player Names Input / Edit Button) */}
+      {/* Mode 1: Local 2 Player */}
       <div className="flex flex-col p-3.5 sm:p-5 rounded-2xl sm:rounded-[24px] bg-[#EF476F] border-3 sm:border-4 border-[#073B4C] text-white shadow-[4px_4px_0px_0px_#073B4C] sm:shadow-[6px_6px_0px_0px_#073B4C]">
         <button
           id="btn-mode-local"
