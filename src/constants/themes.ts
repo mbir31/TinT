@@ -187,8 +187,8 @@ export const BOARD_PRESETS: BoardPreset[] = [
   { id: '4x4', labelBn: '৪ × ৪', labelEn: '4 × 4', rows: 4, cols: 4, winLength: 4, badgeBn: '৪-ইন-এ-রো', badgeEn: '4-in-a-Row' },
   { id: '5x5', labelBn: '৫ × ৫', labelEn: '5 × 5', rows: 5, cols: 5, winLength: 4, badgeBn: 'কৌশলগত ৫x৫', badgeEn: 'Tactical 5x5' },
   { id: '6x6', labelBn: '৬ × ৬', labelEn: '6 × 6', rows: 6, cols: 6, winLength: 4, badgeBn: 'মাঝারি বোর্ড', badgeEn: 'Medium Board' },
-  { id: '8x8', labelBn: '৮ × ৮', labelEn: '8 × 8', rows: 8, cols: 8, winLength: 4, badgeBn: 'দাবা স্টাইল', badgeEn: 'Chess Size' },
-  { id: '10x10', labelBn: '১০ × ১০', labelEn: '10 × 10', rows: 10, cols: 10, winLength: 4, badgeBn: 'মাস্টার গ্রিড', badgeEn: 'Master Grid' },
-  { id: '12x12', labelBn: '১২ × ১২', labelEn: '12 × 12', rows: 12, cols: 12, winLength: 4, badgeBn: 'গ্র্যান্ডমাস্টার', badgeEn: 'Grandmaster' },
-  { id: '15x15', labelBn: '১৫ × ১৫', labelEn: '15 × 15', rows: 15, cols: 15, winLength: 4, badgeBn: 'গোমোকু স্কেল', badgeEn: 'Gomoku Scale' },
+  { id: '8x8', labelBn: '৮ × ৮', labelEn: '8 × 8', rows: 8, cols: 8, winLength: 5, badgeBn: 'দাবা স্টাইল (৫-মিলান)', badgeEn: 'Chess Size (5-in-a-Row)' },
+  { id: '10x10', labelBn: '১০ × ১০', labelEn: '10 × 10', rows: 10, cols: 10, winLength: 5, badgeBn: 'মাস্টার গ্রিড (৫-মিলান)', badgeEn: 'Master Grid (5-in-a-Row)' },
+  { id: '12x12', labelBn: '১২ × ১২', labelEn: '12 × 12', rows: 12, cols: 12, winLength: 5, badgeBn: 'গ্র্যান্ডমাস্টার (৫-মিলান)', badgeEn: 'Grandmaster (5-in-a-Row)' },
+  { id: '15x15', labelBn: '১৫ × ১৫', labelEn: '15 × 15', rows: 15, cols: 15, winLength: 5, badgeBn: 'গোমোকু স্কেল (৫-ইন-এ-রো)', badgeEn: 'Gomoku Scale (5-in-a-Row)' },
 ];

@@ -14,7 +14,7 @@ interface ScoredMove {
 
 /**
  * Filter candidate moves to cells within distance of existing pieces.
- * This drastically optimizes performance on large boards (e.g. 10x10, 15x15).
+ * This drastically optimizes performance on large boards (e.g. 8x8, 10x10, 15x15).
  */
 const getCandidateMoves = (board: BoardState, maxDistance: number = 2): CellCoord[] => {
   const rows = board.length;
@@ -59,7 +59,7 @@ const getCandidateMoves = (board: BoardState, maxDistance: number = 2): CellCoor
 };
 
 /**
- * Heuristic line evaluation for Gomoku / Connect-4 style boards
+ * Heuristic line evaluation for Gomoku / Tic-Tac-Toe line windows
  */
 const evaluateLineWindow = (
   window: (string | null)[],
@@ -77,20 +77,28 @@ const evaluateLineWindow = (
     else emptyCount++;
   }
 
-  // If both players are in this window, neither can complete a line here
+  // If both players are present in this window, neither can complete this line
   if (aiCount > 0 && humanCount > 0) return 0;
 
   if (aiCount === winLength) return 1000000;
   if (humanCount === winLength) return -1000000;
 
-  if (aiCount === winLength - 1 && emptyCount === 1) return 50000;
-  if (humanCount === winLength - 1 && emptyCount === 1) return -70000; // prioritize blocking opponent immediate win
+  // Immediate 1-away threat (winLength - 1)
+  if (aiCount === winLength - 1 && emptyCount === 1) return 60000;
+  if (humanCount === winLength - 1 && emptyCount === 1) return -90000; // Prioritize blocking immediate opponent line
 
-  if (aiCount === winLength - 2 && emptyCount === 2) return 1200;
-  if (humanCount === winLength - 2 && emptyCount === 2) return -1800;
+  // 2-away threat (e.g. 3-in-a-row for winLength 5)
+  if (aiCount === winLength - 2 && emptyCount === 2) return 2500;
+  if (humanCount === winLength - 2 && emptyCount === 2) return -3500;
 
-  if (aiCount === 1 && emptyCount === winLength - 1) return 50;
-  if (humanCount === 1 && emptyCount === winLength - 1) return -60;
+  // 3-away threat
+  if (winLength >= 5) {
+    if (aiCount === winLength - 3 && emptyCount === 3) return 200;
+    if (humanCount === winLength - 3 && emptyCount === 3) return -250;
+  }
+
+  if (aiCount === 1 && emptyCount === winLength - 1) return 30;
+  if (humanCount === 1 && emptyCount === winLength - 1) return -40;
 
   return 0;
 };
@@ -107,10 +115,6 @@ const evaluateBoard = (
   const rows = board.length;
   const cols = board[0].length;
   let totalScore = 0;
-
-  // Center proximity bonus
-  const midR = (rows - 1) / 2;
-  const midC = (cols - 1) / 2;
 
   // Horizontal windows
   for (let r = 0; r < rows; r++) {
@@ -134,7 +138,7 @@ const evaluateBoard = (
     }
   }
 
-  // Diagonal Down-Right windows
+  // Diagonal Down-Right (↘)
   for (let r = 0; r <= rows - winLength; r++) {
     for (let c = 0; c <= cols - winLength; c++) {
       const window: (string | null)[] = [];
@@ -145,7 +149,7 @@ const evaluateBoard = (
     }
   }
 
-  // Diagonal Up-Right windows
+  // Diagonal Up-Right (↗)
   for (let r = winLength - 1; r < rows; r++) {
     for (let c = 0; c <= cols - winLength; c++) {
       const window: (string | null)[] = [];
@@ -156,15 +160,17 @@ const evaluateBoard = (
     }
   }
 
-  // Slight bonus for controlling center
+  // Center proximity bonus
+  const midR = (rows - 1) / 2;
+  const midC = (cols - 1) / 2;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (board[r][c] === aiId) {
         const dist = Math.abs(r - midR) + Math.abs(c - midC);
-        totalScore += (10 - dist);
+        totalScore += Math.max(0, 10 - dist);
       } else if (board[r][c] === humanId) {
         const dist = Math.abs(r - midR) + Math.abs(c - midC);
-        totalScore -= (10 - dist);
+        totalScore -= Math.max(0, 10 - dist);
       }
     }
   }
@@ -231,7 +237,7 @@ const minimax3x3 = (
 };
 
 /**
- * Alpha-Beta search for larger boards with depth limit and time safety
+ * Alpha-Beta search for larger boards with depth limit, move ordering, and time safety
  */
 const alphaBetaSearch = (
   board: BoardState,
@@ -253,34 +259,40 @@ const alphaBetaSearch = (
     return evaluateBoard(board, aiId, humanId, winLength);
   }
 
-  const candidates = getCandidateMoves(board, 1);
-  if (candidates.length === 0) {
+  const rawCandidates = getCandidateMoves(board, 2);
+  if (rawCandidates.length === 0) {
     return evaluateBoard(board, aiId, humanId, winLength);
   }
 
+  // Pre-sort candidates for aggressive alpha-beta pruning (move ordering)
+  const scoredCandidates = rawCandidates.map((m) => {
+    board[m.row][m.col] = isMaximizing ? aiId : humanId;
+    const isWin = checkWin(board, m.row, m.col, winLength).isWin;
+    const val = evaluateBoard(board, aiId, humanId, winLength);
+    board[m.row][m.col] = null;
+    return { move: m, isWin, val };
+  });
+
   if (isMaximizing) {
+    scoredCandidates.sort((a, b) => b.val - a.val);
     let maxEval = -Infinity;
-    for (const move of candidates) {
-      board[move.row][move.col] = aiId;
-      const win = checkWin(board, move.row, move.col, winLength);
-      let evalScore: number;
-      if (win.isWin) {
-        evalScore = 500000 + depth * 1000;
-      } else {
-        evalScore = alphaBetaSearch(
-          board,
-          depth - 1,
-          false,
-          aiId,
-          humanId,
-          winLength,
-          alpha,
-          beta,
-          startTime,
-          timeLimitMs
-        );
-      }
-      board[move.row][move.col] = null;
+    for (const item of scoredCandidates) {
+      if (item.isWin) return 500000 + depth * 1000;
+
+      board[item.move.row][item.move.col] = aiId;
+      const evalScore = alphaBetaSearch(
+        board,
+        depth - 1,
+        false,
+        aiId,
+        humanId,
+        winLength,
+        alpha,
+        beta,
+        startTime,
+        timeLimitMs
+      );
+      board[item.move.row][item.move.col] = null;
 
       maxEval = Math.max(maxEval, evalScore);
       alpha = Math.max(alpha, evalScore);
@@ -288,28 +300,25 @@ const alphaBetaSearch = (
     }
     return maxEval;
   } else {
+    scoredCandidates.sort((a, b) => a.val - b.val);
     let minEval = Infinity;
-    for (const move of candidates) {
-      board[move.row][move.col] = humanId;
-      const win = checkWin(board, move.row, move.col, winLength);
-      let evalScore: number;
-      if (win.isWin) {
-        evalScore = -500000 - depth * 1000;
-      } else {
-        evalScore = alphaBetaSearch(
-          board,
-          depth - 1,
-          true,
-          aiId,
-          humanId,
-          winLength,
-          alpha,
-          beta,
-          startTime,
-          timeLimitMs
-        );
-      }
-      board[move.row][move.col] = null;
+    for (const item of scoredCandidates) {
+      if (item.isWin) return -500000 - depth * 1000;
+
+      board[item.move.row][item.move.col] = humanId;
+      const evalScore = alphaBetaSearch(
+        board,
+        depth - 1,
+        true,
+        aiId,
+        humanId,
+        winLength,
+        alpha,
+        beta,
+        startTime,
+        timeLimitMs
+      );
+      board[item.move.row][item.move.col] = null;
 
       minEval = Math.min(minEval, evalScore);
       beta = Math.min(beta, evalScore);
@@ -320,7 +329,7 @@ const alphaBetaSearch = (
 };
 
 /**
- * Main AI move calculator
+ * Main AI move calculator for Tic-Tac-Toe / Gomoku
  */
 export const calculateAIMove = async (
   board: BoardState,
@@ -336,26 +345,31 @@ export const calculateAIMove = async (
   const cols = board[0].length;
   const isSmallBoard = rows === 3 && cols === 3;
 
-  // 1. EASY DIFFICULTY: 70% random, 30% tactical
+  // ----------------------------------------------------
+  // 1. EASY DIFFICULTY: 75% casual / exploratory, 25% immediate tactical win
+  // ----------------------------------------------------
   if (difficulty === 'easy') {
-    if (Math.random() < 0.65) {
-      const randIdx = Math.floor(Math.random() * availableMoves.length);
-      return availableMoves[randIdx];
-    }
-    // Check if immediate win is available
-    for (const move of availableMoves) {
-      const testBoard = cloneBoard(board);
-      testBoard[move.row][move.col] = aiId;
-      if (checkWin(testBoard, move.row, move.col, winLength).isWin) {
-        return move;
+    if (Math.random() < 0.25) {
+      for (const move of availableMoves) {
+        const testBoard = cloneBoard(board);
+        testBoard[move.row][move.col] = aiId;
+        if (checkWin(testBoard, move.row, move.col, winLength).isWin) {
+          return move;
+        }
       }
     }
-    const randIdx = Math.floor(Math.random() * availableMoves.length);
-    return availableMoves[randIdx];
+    // Prefer moves near center or random valid move
+    const centerMoves = getCandidateMoves(board, 1);
+    if (centerMoves.length > 0 && Math.random() < 0.4) {
+      return centerMoves[Math.floor(Math.random() * centerMoves.length)];
+    }
+    return availableMoves[Math.floor(Math.random() * availableMoves.length)];
   }
 
-  // 2. MEDIUM DIFFICULTY: Always grab immediate win; always block immediate threat; then score
-  // Check immediate AI win
+  // ----------------------------------------------------
+  // 2. TACTICAL BASELINE FOR MEDIUM & HARD:
+  // ----------------------------------------------------
+  // Always grab immediate AI win
   for (const move of availableMoves) {
     const testBoard = cloneBoard(board);
     testBoard[move.row][move.col] = aiId;
@@ -364,7 +378,7 @@ export const calculateAIMove = async (
     }
   }
 
-  // Check immediate opponent win to block
+  // Always block immediate opponent win
   for (const move of availableMoves) {
     const testBoard = cloneBoard(board);
     testBoard[move.row][move.col] = humanId;
@@ -373,6 +387,9 @@ export const calculateAIMove = async (
     }
   }
 
+  // ----------------------------------------------------
+  // 3. MEDIUM DIFFICULTY: 1-ply heuristic with slight noise
+  // ----------------------------------------------------
   if (difficulty === 'medium') {
     const candidates = getCandidateMoves(board, 2);
     const scoredCandidates: ScoredMove[] = [];
@@ -381,11 +398,10 @@ export const calculateAIMove = async (
       const testBoard = cloneBoard(board);
       testBoard[move.row][move.col] = aiId;
       const score = evaluateBoard(testBoard, aiId, humanId, winLength);
-      // add slight randomness
       scoredCandidates.push({
         row: move.row,
         col: move.col,
-        score: score + (Math.random() * 80 - 40)
+        score: score + (Math.random() * 60 - 30)
       });
     }
 
@@ -393,8 +409,10 @@ export const calculateAIMove = async (
     return scoredCandidates[0] || availableMoves[0];
   }
 
-  // 3. HARD DIFFICULTY:
-  // For 3x3: Exact Minimax
+  // ----------------------------------------------------
+  // 4. HARD DIFFICULTY:
+  // ----------------------------------------------------
+  // For 3x3: Provably unbeatable Minimax
   if (isSmallBoard) {
     let bestScore = -Infinity;
     let bestMove: CellCoord = availableMoves[0];
@@ -419,16 +437,25 @@ export const calculateAIMove = async (
     return bestMove;
   }
 
-  // For >= 4x4 boards on HARD:
-  const candidates = getCandidateMoves(board, 1);
-  const searchDepth = candidates.length > 30 ? 2 : (candidates.length > 15 ? 3 : 4);
+  // For >= 4x4 up to 15x15 Gomoku on HARD:
+  const candidates = getCandidateMoves(board, 2);
+  const searchDepth = candidates.length > 35 ? 2 : (candidates.length > 18 ? 3 : 4);
   const startTime = Date.now();
-  const timeLimitMs = 120; // safe 120ms compute window
+  const timeLimitMs = 140; // 140ms compute window for smooth mobile responsiveness
 
   let bestScore = -Infinity;
   let bestMove: CellCoord = candidates[0] || availableMoves[0];
 
-  for (const move of candidates) {
+  // Pre-sort candidates
+  const scoredList = candidates.map((move) => {
+    const testBoard = cloneBoard(board);
+    testBoard[move.row][move.col] = aiId;
+    const score = evaluateBoard(testBoard, aiId, humanId, winLength);
+    return { move, score };
+  });
+  scoredList.sort((a, b) => b.score - a.score);
+
+  for (const { move } of scoredList) {
     const testBoard = cloneBoard(board);
     testBoard[move.row][move.col] = aiId;
 
@@ -436,7 +463,7 @@ export const calculateAIMove = async (
     let evalScore: number;
 
     if (win.isWin) {
-      return move; // Instant game winning move
+      return move;
     } else {
       evalScore = alphaBetaSearch(
         testBoard,
@@ -445,7 +472,7 @@ export const calculateAIMove = async (
         aiId,
         humanId,
         winLength,
-        -Infinity,
+        bestScore,
         Infinity,
         startTime,
         timeLimitMs
@@ -460,3 +487,4 @@ export const calculateAIMove = async (
 
   return bestMove;
 };
+

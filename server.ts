@@ -25,6 +25,7 @@ import {
 } from './src/types';
 import {
   createInitialBoard,
+  getWinLengthForBoard,
   isValidMove as isValidTicTacToeMove,
   makeMove as makeTicTacToeMove,
   checkWin as checkTicTacToeWin,
@@ -239,7 +240,9 @@ io.on('connection', (socket: Socket) => {
         if (gameType === 'tictactoe') {
           const rows = Math.max(3, Math.min(15, Number(payload.config?.rows) || 3));
           const cols = Math.max(3, Math.min(15, Number(payload.config?.cols) || 3));
-          const winLength = Math.max(3, Math.min(cols, Number(payload.config?.winLength) || (rows <= 3 && cols <= 3 ? 3 : 4)));
+          const maxPossible = Math.min(rows, cols);
+          const defaultWin = getWinLengthForBoard(rows, cols);
+          const winLength = Math.max(3, Math.min(maxPossible, Number(payload.config?.winLength) || defaultWin));
           const bConfig: BoardConfig = { rows, cols, winLength, presetKey: payload.config?.presetKey };
           serverRoom.boardConfig = bConfig;
           serverRoom.gameState = {

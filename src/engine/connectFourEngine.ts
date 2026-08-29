@@ -299,6 +299,59 @@ export const makeConnectFourDrop = (
 };
 
 /**
+ * Fast localized win check for Connect Four when a piece is dropped at (lastRow, lastCol)
+ */
+const checkLocalConnectFourWin = (
+  board: (string | null)[][],
+  lastRow: number,
+  lastCol: number,
+  winLength: number
+): boolean => {
+  const target = board[lastRow][lastCol];
+  if (!target) return false;
+
+  const rows = board.length;
+  const cols = board[0].length;
+
+  const directions = [
+    { dr: 0, dc: 1 },  // Horizontal
+    { dr: 1, dc: 0 },  // Vertical
+    { dr: 1, dc: 1 },  // Diagonal ↘
+    { dr: -1, dc: 1 }  // Diagonal ↗
+  ];
+
+  for (const { dr, dc } of directions) {
+    let count = 1;
+
+    // Positive step
+    for (let step = 1; step < winLength; step++) {
+      const r = lastRow + dr * step;
+      const c = lastCol + dc * step;
+      if (r >= 0 && r < rows && c >= 0 && c < cols && board[r][c] === target) {
+        count++;
+      } else {
+        break;
+      }
+    }
+
+    // Negative step
+    for (let step = 1; step < winLength; step++) {
+      const r = lastRow - dr * step;
+      const c = lastCol - dc * step;
+      if (r >= 0 && r < rows && c >= 0 && c < cols && board[r][c] === target) {
+        count++;
+      } else {
+        break;
+      }
+    }
+
+    if (count >= winLength) return true;
+  }
+
+  return false;
+};
+
+/**
  * Heuristic AI Engine for Connect Four (Easy, Medium, Hard with Minimax)
  */
 export const getConnectFourAIMove = (
@@ -309,6 +362,7 @@ export const getConnectFourAIMove = (
   humanPlayerId: string
 ): number => {
   const cols = config.cols;
+  const winLength = config.winLength || 4;
   const validCols: number[] = [];
 
   for (let c = 0; c < cols; c++) {
@@ -320,47 +374,62 @@ export const getConnectFourAIMove = (
   if (validCols.length === 0) return 0;
   if (validCols.length === 1) return validCols[0];
 
-  // Helper: column center bias order
   const centerCol = Math.floor(cols / 2);
   const sortedByCenter = [...validCols].sort(
     (a, b) => Math.abs(a - centerCol) - Math.abs(b - centerCol)
   );
 
-  // 1. Check if AI can win immediately this turn
-  for (const c of sortedByCenter) {
-    const r = getLowestAvailableRow(board, c);
-    if (r !== -1) {
-      board[r][c] = aiPlayerId;
-      const win = checkConnectFourWin(board, config.winLength);
-      board[r][c] = null;
-      if (win && win.winnerId === aiPlayerId) {
-        return c;
-      }
-    }
-  }
-
-  // 2. Check if opponent can win on their next turn and block them immediately
-  for (const c of sortedByCenter) {
-    const r = getLowestAvailableRow(board, c);
-    if (r !== -1) {
-      board[r][c] = humanPlayerId;
-      const win = checkConnectFourWin(board, config.winLength);
-      board[r][c] = null;
-      if (win && win.winnerId === humanPlayerId) {
-        return c; // Must block!
-      }
-    }
-  }
-
-  // Easy Difficulty: occasional center bias or random exploration
+  // ----------------------------------------------------
+  // 1. EASY DIFFICULTY: 70% casual / exploratory, 30% tactical win
+  // ----------------------------------------------------
   if (difficulty === 'easy') {
+    // 30% chance to take an immediate winning move if available
+    if (Math.random() < 0.3) {
+      for (const c of sortedByCenter) {
+        const r = getLowestAvailableRow(board, c);
+        if (r !== -1) {
+          board[r][c] = aiPlayerId;
+          const isWin = checkLocalConnectFourWin(board, r, c, winLength);
+          board[r][c] = null;
+          if (isWin) return c;
+        }
+      }
+    }
+    // 40% center bias, otherwise random valid column
     if (Math.random() < 0.4) {
       return sortedByCenter[0];
     }
     return validCols[Math.floor(Math.random() * validCols.length)];
   }
 
-  // Medium Difficulty: safe 2-step lookahead (avoid giving opponent winning setup)
+  // ----------------------------------------------------
+  // 2. TACTICAL BASELINE FOR MEDIUM & HARD:
+  // ----------------------------------------------------
+  // Always take immediate AI winning drops
+  for (const c of sortedByCenter) {
+    const r = getLowestAvailableRow(board, c);
+    if (r !== -1) {
+      board[r][c] = aiPlayerId;
+      const isWin = checkLocalConnectFourWin(board, r, c, winLength);
+      board[r][c] = null;
+      if (isWin) return c;
+    }
+  }
+
+  // Always block immediate human winning drops
+  for (const c of sortedByCenter) {
+    const r = getLowestAvailableRow(board, c);
+    if (r !== -1) {
+      board[r][c] = humanPlayerId;
+      const isWin = checkLocalConnectFourWin(board, r, c, winLength);
+      board[r][c] = null;
+      if (isWin) return c;
+    }
+  }
+
+  // ----------------------------------------------------
+  // 3. MEDIUM DIFFICULTY: Safe 2-step lookahead
+  // ----------------------------------------------------
   if (difficulty === 'medium') {
     const safeCols: number[] = [];
 
@@ -371,14 +440,14 @@ export const getConnectFourAIMove = (
       // Simulate AI move
       board[r][c] = aiPlayerId;
 
-      // Check if this move allows opponent to win directly above it
+      // Check if this move enables opponent to win on the cell right above
       let givesOpponentWin = false;
       const rowAbove = r - 1;
       if (rowAbove >= 0) {
         board[rowAbove][c] = humanPlayerId;
-        const win = checkConnectFourWin(board, config.winLength);
+        const isOppWin = checkLocalConnectFourWin(board, rowAbove, c, winLength);
         board[rowAbove][c] = null;
-        if (win && win.winnerId === humanPlayerId) {
+        if (isOppWin) {
           givesOpponentWin = true;
         }
       }
@@ -391,20 +460,20 @@ export const getConnectFourAIMove = (
     }
 
     if (safeCols.length > 0) {
-      // Prioritize center column among safe moves
       return safeCols[0];
     }
 
     return sortedByCenter[0];
   }
 
-  // Hard Difficulty: Minimax with Alpha-Beta Pruning (Depth 4)
+  // ----------------------------------------------------
+  // 4. HARD DIFFICULTY: Alpha-Beta Minimax with Dynamic winLength
+  // ----------------------------------------------------
   const evaluateWindow = (
     window: (string | null)[],
     aiId: string,
     oppId: string
   ): number => {
-    let score = 0;
     let aiCount = 0;
     let oppCount = 0;
     let emptyCount = 0;
@@ -415,14 +484,18 @@ export const getConnectFourAIMove = (
       else emptyCount++;
     }
 
-    if (aiCount === 4) score += 10000;
-    else if (aiCount === 3 && emptyCount === 1) score += 50;
-    else if (aiCount === 2 && emptyCount === 2) score += 8;
+    if (aiCount > 0 && oppCount > 0) return 0;
 
-    if (oppCount === 3 && emptyCount === 1) score -= 90;
-    else if (oppCount === 2 && emptyCount === 2) score -= 12;
+    if (aiCount === winLength) return 10000;
+    if (oppCount === winLength) return -10000;
 
-    return score;
+    if (aiCount === winLength - 1 && emptyCount === 1) return 100;
+    if (oppCount === winLength - 1 && emptyCount === 1) return -150;
+
+    if (aiCount === winLength - 2 && emptyCount === 2) return 15;
+    if (oppCount === winLength - 2 && emptyCount === 2) return -25;
+
+    return 0;
   };
 
   const scorePosition = (
@@ -439,57 +512,50 @@ export const getConnectFourAIMove = (
     let centerCount = 0;
     for (let r = 0; r < rCount; r++) {
       if (currentBoard[r][cCenter] === aiId) centerCount++;
+      else if (currentBoard[r][cCenter] === oppId) centerCount--;
     }
     totalScore += centerCount * 6;
 
-    // Horizontal
+    // Horizontal windows
     for (let r = 0; r < rCount; r++) {
-      for (let c = 0; c <= cCount - 4; c++) {
-        const window = [
-          currentBoard[r][c],
-          currentBoard[r][c + 1],
-          currentBoard[r][c + 2],
-          currentBoard[r][c + 3]
-        ];
+      for (let c = 0; c <= cCount - winLength; c++) {
+        const window: (string | null)[] = [];
+        for (let k = 0; k < winLength; k++) {
+          window.push(currentBoard[r][c + k]);
+        }
         totalScore += evaluateWindow(window, aiId, oppId);
       }
     }
 
-    // Vertical
+    // Vertical windows
     for (let c = 0; c < cCount; c++) {
-      for (let r = 0; r <= rCount - 4; r++) {
-        const window = [
-          currentBoard[r][c],
-          currentBoard[r + 1][c],
-          currentBoard[r + 2][c],
-          currentBoard[r + 3][c]
-        ];
+      for (let r = 0; r <= rCount - winLength; r++) {
+        const window: (string | null)[] = [];
+        for (let k = 0; k < winLength; k++) {
+          window.push(currentBoard[r + k][c]);
+        }
         totalScore += evaluateWindow(window, aiId, oppId);
       }
     }
 
-    // Diagonal Positive (↘)
-    for (let r = 0; r <= rCount - 4; r++) {
-      for (let c = 0; c <= cCount - 4; c++) {
-        const window = [
-          currentBoard[r][c],
-          currentBoard[r + 1][c + 1],
-          currentBoard[r + 2][c + 2],
-          currentBoard[r + 3][c + 3]
-        ];
+    // Diagonal Down-Right (↘)
+    for (let r = 0; r <= rCount - winLength; r++) {
+      for (let c = 0; c <= cCount - winLength; c++) {
+        const window: (string | null)[] = [];
+        for (let k = 0; k < winLength; k++) {
+          window.push(currentBoard[r + k][c + k]);
+        }
         totalScore += evaluateWindow(window, aiId, oppId);
       }
     }
 
-    // Diagonal Negative (↗)
-    for (let r = 3; r < rCount; r++) {
-      for (let c = 0; c <= cCount - 4; c++) {
-        const window = [
-          currentBoard[r][c],
-          currentBoard[r - 1][c + 1],
-          currentBoard[r - 2][c + 2],
-          currentBoard[r - 3][c + 3]
-        ];
+    // Diagonal Up-Right (↗)
+    for (let r = winLength - 1; r < rCount; r++) {
+      for (let c = 0; c <= cCount - winLength; c++) {
+        const window: (string | null)[] = [];
+        for (let k = 0; k < winLength; k++) {
+          window.push(currentBoard[r - k][c + k]);
+        }
         totalScore += evaluateWindow(window, aiId, oppId);
       }
     }
@@ -502,14 +568,22 @@ export const getConnectFourAIMove = (
     depth: number,
     alpha: number,
     beta: number,
-    isMaximizing: boolean
+    isMaximizing: boolean,
+    lastRow: number,
+    lastCol: number
   ): { score: number; bestCol: number } => {
-    const win = checkConnectFourWin(currBoard, config.winLength);
-    if (win) {
-      if (win.winnerId === aiPlayerId) return { score: 100000 + depth, bestCol: -1 };
-      if (win.winnerId === humanPlayerId) return { score: -100000 - depth, bestCol: -1 };
+    // Check if the previous move caused a win
+    if (lastRow !== -1 && lastCol !== -1) {
+      const prevPlayer = isMaximizing ? humanPlayerId : aiPlayerId;
+      if (checkLocalConnectFourWin(currBoard, lastRow, lastCol, winLength)) {
+        return {
+          score: prevPlayer === aiPlayerId ? 100000 + depth : -100000 - depth,
+          bestCol: -1
+        };
+      }
     }
-    if (isConnectFourBoardFull(currBoard) || depth === 0) {
+
+    if (depth === 0 || isConnectFourBoardFull(currBoard)) {
       return { score: scorePosition(currBoard, aiPlayerId, humanPlayerId), bestCol: -1 };
     }
 
@@ -528,7 +602,7 @@ export const getConnectFourAIMove = (
       for (const col of prioritized) {
         const row = getLowestAvailableRow(currBoard, col);
         currBoard[row][col] = aiPlayerId;
-        const evaluation = minimax(currBoard, depth - 1, alpha, beta, false).score;
+        const evaluation = minimax(currBoard, depth - 1, alpha, beta, false, row, col).score;
         currBoard[row][col] = null;
 
         if (evaluation > maxEval) {
@@ -546,7 +620,7 @@ export const getConnectFourAIMove = (
       for (const col of prioritized) {
         const row = getLowestAvailableRow(currBoard, col);
         currBoard[row][col] = humanPlayerId;
-        const evaluation = minimax(currBoard, depth - 1, alpha, beta, true).score;
+        const evaluation = minimax(currBoard, depth - 1, alpha, beta, true, row, col).score;
         currBoard[row][col] = null;
 
         if (evaluation < minEval) {
@@ -560,9 +634,10 @@ export const getConnectFourAIMove = (
     }
   };
 
-  const searchDepth = config.cols <= 7 ? 4 : 3;
-  const result = minimax(board, searchDepth, -Infinity, Infinity, true);
+  const searchDepth = config.cols <= 7 ? 5 : 4;
+  const result = minimax(board, searchDepth, -Infinity, Infinity, true, -1, -1);
   return result.bestCol !== -1 && validCols.includes(result.bestCol)
     ? result.bestCol
     : sortedByCenter[0];
 };
+

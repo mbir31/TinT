@@ -34,6 +34,22 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
   const [customCols, setCustomCols] = useState<number>(currentConfig.cols);
   const [customWin, setCustomWin] = useState<number>(currentConfig.winLength);
 
+  const handleRowsChange = (newRows: number) => {
+    setCustomRows(newRows);
+    const maxWin = Math.min(newRows, customCols, 5);
+    if (customWin > maxWin) {
+      setCustomWin(maxWin);
+    }
+  };
+
+  const handleColsChange = (newCols: number) => {
+    setCustomCols(newCols);
+    const maxWin = Math.min(customRows, newCols, 5);
+    if (customWin > maxWin) {
+      setCustomWin(maxWin);
+    }
+  };
+
   const handleApplyCustom = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
@@ -177,7 +193,7 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
                   min="3"
                   max="15"
                   value={customRows}
-                  onChange={(e) => setCustomRows(parseInt(e.target.value))}
+                  onChange={(e) => handleRowsChange(parseInt(e.target.value))}
                   className="w-full accent-[#EF476F] cursor-pointer"
                 />
               </div>
@@ -197,7 +213,7 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
                   min="3"
                   max="15"
                   value={customCols}
-                  onChange={(e) => setCustomCols(parseInt(e.target.value))}
+                  onChange={(e) => handleColsChange(parseInt(e.target.value))}
                   className="w-full accent-[#118AB2] cursor-pointer"
                 />
               </div>

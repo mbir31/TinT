@@ -67,6 +67,63 @@ const createsThreeSidedBox = (
 };
 
 /**
+ * Clones the 2D line grids for simulation
+ */
+const cloneLineGrids = (
+  hLines: (string | null)[][],
+  vLines: (string | null)[][]
+): { h: (string | null)[][]; v: (string | null)[][] } => {
+  return {
+    h: hLines.map((row) => [...row]),
+    v: vLines.map((row) => [...row])
+  };
+};
+
+/**
+ * Simulates greedy capture chain length conceded to opponent if a sacrifice move is played
+ */
+const simulateSacrificeChain = (
+  line: DotsLine,
+  originalHLines: (string | null)[][],
+  originalVLines: (string | null)[][]
+): number => {
+  const { h, v } = cloneLineGrids(originalHLines, originalVLines);
+  const boxRows = h.length - 1;
+  const boxCols = v[0].length - 1;
+
+  // Apply the sacrifice move
+  if (line.orientation === 'horizontal') {
+    h[line.row][line.col] = 'ai';
+  } else {
+    v[line.row][line.col] = 'ai';
+  }
+
+  // Count how many boxes the opponent can recursively take in chain
+  let totalCaptured = 0;
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    // Find any box with 3 sides completed
+    for (let r = 0; r < boxRows; r++) {
+      for (let c = 0; c < boxCols; c++) {
+        if (countBoxSides(r, c, h, v) === 3) {
+          totalCaptured++;
+          changed = true;
+          // Fill the missing 4th side in simulation
+          if (h[r][c] === null) h[r][c] = 'opp';
+          else if (h[r + 1][c] === null) h[r + 1][c] = 'opp';
+          else if (v[r][c] === null) v[r][c] = 'opp';
+          else if (v[r][c + 1] === null) v[r][c + 1] = 'opp';
+        }
+      }
+    }
+  }
+
+  return totalCaptured;
+};
+
+/**
  * Calculates optimal AI move for Dots and Boxes
  */
 export const calculateDotsAIMove = (
@@ -85,10 +142,11 @@ export const calculateDotsAIMove = (
     }
   }
 
-  // Easy mode: 40% chance of making a random move even if a box is open
+  // ----------------------------------------------------
+  // EASY DIFFICULTY: 45% casual / random moves, 55% captures
+  // ----------------------------------------------------
   if (difficulty === 'easy') {
-    if (capturingMoves.length > 0 && Math.random() < 0.6) {
-      // Pick best capturing move
+    if (capturingMoves.length > 0 && Math.random() < 0.55) {
       capturingMoves.sort((a, b) => b.count - a.count);
       return capturingMoves[0].line;
     }
@@ -96,9 +154,10 @@ export const calculateDotsAIMove = (
     return available[randomIndex];
   }
 
-  // Medium and Hard: ALWAYS take free box completions!
+  // ----------------------------------------------------
+  // MEDIUM & HARD: Always take all free box completions (+2 prioritized over +1)
+  // ----------------------------------------------------
   if (capturingMoves.length > 0) {
-    // Prefer double captures (+2 boxes) over single
     capturingMoves.sort((a, b) => b.count - a.count);
     return capturingMoves[0].line;
   }
@@ -111,14 +170,23 @@ export const calculateDotsAIMove = (
     }
   }
 
-  if (safeMoves.length > 0) {
-    if (difficulty === 'medium') {
+  // ----------------------------------------------------
+  // MEDIUM DIFFICULTY: Safe move selection or random fallback
+  // ----------------------------------------------------
+  if (difficulty === 'medium') {
+    if (safeMoves.length > 0) {
       const randomIndex = Math.floor(Math.random() * safeMoves.length);
       return safeMoves[randomIndex];
     }
+    const randomIndex = Math.floor(Math.random() * available.length);
+    return available[randomIndex];
+  }
 
-    // Hard: Pick strategically among safe moves
-    // Prefer moves that build on 0-sided boxes rather than 1-sided boxes
+  // ----------------------------------------------------
+  // HARD DIFFICULTY:
+  // ----------------------------------------------------
+  if (safeMoves.length > 0) {
+    // Rate safe moves: prefer moves that open 0-sided boxes rather than creating 2-sided boxes
     const ratedMoves = safeMoves.map((line) => {
       let score = 0;
       const { orientation, row, col } = line;
@@ -139,31 +207,13 @@ export const calculateDotsAIMove = (
     return ratedMoves[0].line;
   }
 
-  // 3. When NO safe moves exist: sacrifice the minimum number of boxes
-  // Hard mode: evaluate which sacrifice gives away the smallest chain
-  if (difficulty === 'hard') {
-    // Pick the line that creates the fewest 3-sided boxes
-    const sacrifices = available.map((line) => {
-      let count = 0;
-      const { orientation, row, col } = line;
-      const boxRows = state.config.dotRows - 1;
-      const boxCols = state.config.dotCols - 1;
+  // 3. Forced sacrifice phase: simulate chain reaction to give away minimum boxes
+  const sacrifices = available.map((line) => {
+    const chainConceded = simulateSacrificeChain(line, state.horizontalLines, state.verticalLines);
+    return { line, chainConceded };
+  });
 
-      if (orientation === 'horizontal') {
-        if (row > 0 && countBoxSides(row - 1, col, state.horizontalLines, state.verticalLines) === 2) count++;
-        if (row < boxRows && countBoxSides(row, col, state.horizontalLines, state.verticalLines) === 2) count++;
-      } else {
-        if (col > 0 && countBoxSides(row, col - 1, state.horizontalLines, state.verticalLines) === 2) count++;
-        if (col < boxCols && countBoxSides(row, col, state.horizontalLines, state.verticalLines) === 2) count++;
-      }
-      return { line, count };
-    });
-
-    sacrifices.sort((a, b) => a.count - b.count);
-    return sacrifices[0].line;
-  }
-
-  // Default fallback
-  const randomIndex = Math.floor(Math.random() * available.length);
-  return available[randomIndex];
+  sacrifices.sort((a, b) => a.chainConceded - b.chainConceded);
+  return sacrifices[0].line;
 };
+

@@ -9,6 +9,9 @@ export const getWinLengthForBoard = (rows: number, cols: number): number => {
   if (rows <= 3 && cols <= 3) {
     return 3;
   }
+  if (rows >= 8 || cols >= 8) {
+    return 5;
+  }
   return 4;
 };
 
@@ -119,10 +122,14 @@ export const checkWin = (
     }
 
     if (matchingCells.length >= winLength) {
-      // Find the contiguous segment containing lastRow, lastCol
+      // Find contiguous segment containing lastRow, lastCol
+      const lastIndex = matchingCells.findIndex((cell) => cell.row === lastRow && cell.col === lastCol);
+      const startIdx = lastIndex >= 0
+        ? Math.max(0, Math.min(lastIndex - Math.floor(winLength / 2), matchingCells.length - winLength))
+        : 0;
       return {
         isWin: true,
-        winningCells: matchingCells.slice(0, winLength)
+        winningCells: matchingCells.slice(startIdx, startIdx + winLength)
       };
     }
   }
@@ -161,9 +168,11 @@ export const createInitialGameState = (
   mode: GameState['mode'],
   aiDifficulty?: GameState['aiDifficulty']
 ): GameState => {
-  const rows = boardConfig.rows;
-  const cols = boardConfig.cols;
-  const winLength = boardConfig.winLength || getWinLengthForBoard(rows, cols);
+  const rows = Math.max(3, Math.min(15, boardConfig.rows));
+  const cols = Math.max(3, Math.min(15, boardConfig.cols));
+  const maxPossible = Math.min(rows, cols);
+  const defaultWin = getWinLengthForBoard(rows, cols);
+  const winLength = Math.max(3, Math.min(maxPossible, boardConfig.winLength || defaultWin));
 
   return {
     id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,

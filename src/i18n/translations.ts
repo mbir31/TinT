@@ -61,6 +61,7 @@ export const TRANSLATIONS = {
     cols: 'কলাম (Columns)',
     winRule3: '৩টি চিহ্ন এক লাইনে মিলালে জয়',
     winRule4: 'যেকোনো ৪টি চিহ্ন এক লাইনে মিলালে জয় (আড়াআড়ি, লম্ব বা কোণাকুণি)',
+    winRule5: 'যেকোনো ৫টি চিহ্ন এক লাইনে মিলালে জয় (গোমোকু স্কেল বা বড় বোর্ড)',
     ruleBadge: 'জয়ের নিয়ম',
     
     // Players Customization
@@ -173,7 +174,7 @@ export const TRANSLATIONS = {
     about: 'পরিচিতি ও নিয়মাবলী',
     aboutTitle: 'TinT সম্পর্কে',
     aboutContent: 'TinT হলো আধুনিক প্রোগ্রেসিভ ওয়েব অ্যাপ (PWA) নির্ভর একটি বাংলাদেশি ৩ডি বোর্ড গেম। এতে রয়েছে দ্রুত অফলাইন খেলা, বুদ্ধিমান AI, কাস্টম বোর্ড ও রিয়েল-টাইম অনলাইন রুম ব্যবস্থা।',
-    rulesSummary: '৩×৩ বোর্ডে ৩টি চিহ্ন এবং ৪×৪ বা তার চেয়ে বড় বোর্ডে ৪টি চিহ্ন আড়াআড়ি, লম্ব বা কোণাকুণি মেলালেই জয়লাভ হবে।',
+    rulesSummary: '৩×৩ বোর্ডে ৩টি চিহ্ন, ৪×৪ থেকে ৬×৬ বোর্ডে ৪টি চিহ্ন এবং ৮×৮ বা তার চেয়ে বড় বোর্ডে ৫টি চিহ্ন (গোমোকু স্কেল) মেলালেই জয়লাভ হবে।',
     offlineStatus: 'আপনি বর্তমানে অফলাইনে আছেন (লোকাল ও এআই খেলা সচল)',
     installApp: 'অ্যাপ ইনস্টল করুন',
     installPrompt: 'হোমস্ক্রিনে যোগ করে অফলাইনে খেলুন',
@@ -223,6 +224,7 @@ export const TRANSLATIONS = {
     cols: 'Columns',
     winRule3: 'Align 3 marks in a line to win',
     winRule4: 'Align any 4 marks in a line to win (Horizontal, Vertical, or Diagonal)',
+    winRule5: 'Align any 5 marks in a line to win (Gomoku Scale & Large Grids)',
     ruleBadge: 'Win Rule',
     
     // Players Customization
@@ -335,7 +337,7 @@ export const TRANSLATIONS = {
     about: 'About & Rules',
     aboutTitle: 'About TinT',
     aboutContent: 'TinT is a modern, Bengali-first 3D Progressive Web App board game featuring instant offline play, strategic AI bots, customizable grids, and real-time multiplayer room synchronization.',
-    rulesSummary: 'Match 3 consecutive marks on 3×3 boards or 4 consecutive marks on 4×4+ boards across horizontal, vertical, or diagonal directions.',
+    rulesSummary: 'Match 3 consecutive marks on 3×3, 4 marks on 4×4 to 6×6, or 5 marks on 8×8+ boards (Gomoku scale) horizontally, vertically, or diagonally to win.',
     offlineStatus: 'You are currently offline (Local and AI modes fully functional)',
     installApp: 'Install App',
     installPrompt: 'Install to home screen for fast offline play',
