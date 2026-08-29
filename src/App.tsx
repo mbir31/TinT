@@ -55,6 +55,7 @@ import {
 import {
   createInitialDotsState,
   makeDotsMove,
+  isLegalLine as isLegalDotsLine,
   DOTS_PRESETS
 } from './engine/dotsEngine';
 import {
@@ -652,6 +653,7 @@ export default function App() {
         if (!roomCode || !localPlayerToken || !roomState || roomState.status !== 'active') return;
         const currentActivePlayer = dotsGameState.players[dotsGameState.currentPlayerIndex];
         if (currentActivePlayer.id !== localOnlineId) return;
+        if (!isLegalDotsLine(line, dotsGameState.horizontalLines, dotsGameState.verticalLines)) return;
 
         const isP2 = currentActivePlayer.id === player2.id || currentActivePlayer.id === aiPlayer.id;
         soundEngine.playPlace(isP2);
@@ -978,6 +980,28 @@ export default function App() {
       setCurrentView('playing');
     }
 
+    // Audio-visual feedback for opponent moves
+    if (updatedRoom.lastAction && updatedRoom.lastAction.playerId !== localOnlineId) {
+      if (updatedRoom.lastAction.type === 'tictactoe_move') {
+        setLastMoveCoord({ row: updatedRoom.lastAction.row, col: updatedRoom.lastAction.col });
+        if (!updatedRoom.lastAction.isWin && !updatedRoom.lastAction.isDraw) {
+          soundEngine.playPlace(true);
+          hapticsEngine.trigger('move');
+        }
+      } else if (updatedRoom.lastAction.type === 'dots_move') {
+        if (updatedRoom.lastAction.completedBoxes && updatedRoom.lastAction.completedBoxes.length > 0) {
+          soundEngine.playBoxCapture();
+          hapticsEngine.trigger('heavy');
+        } else {
+          soundEngine.playPlace(true);
+          hapticsEngine.trigger('move');
+        }
+      } else if (updatedRoom.lastAction.type === 'c4_drop') {
+        soundEngine.playDiscDrop(updatedRoom.lastAction.col, updatedRoom.c4Config?.cols || 7, true);
+        hapticsEngine.trigger('move');
+      }
+    }
+
     if (updatedRoom.gameType === 'tictactoe' && updatedRoom.gameState) {
       const nextGame = updatedRoom.gameState;
       setGameState((prev) => {
@@ -1012,6 +1036,9 @@ export default function App() {
             if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
             else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
           }
+          if (nextDots.lastLine) {
+            setWinningDotsLine(nextDots.lastLine);
+          }
         } else if (prev.status === 'playing' && nextDots.status === 'draw') {
           soundEngine.playDraw();
           hapticsEngine.trigger('draw');
@@ -1037,7 +1064,7 @@ export default function App() {
         return nextC4;
       });
     }
-  }, [activeGame, player1.id, player2.id, triggerAchievementCheck]);
+  }, [activeGame, localOnlineId, player1.id, player2.id, triggerAchievementCheck]);
 
   const setupRoomSubscription = useCallback((code: string) => {
     if (unsubscribeRoomRef.current) {
@@ -1173,7 +1200,16 @@ export default function App() {
             setIsOnlineWaiting(true);
             setCurrentView('online-lobby');
           }
+          if (res.roomState.gameType === 'tictactoe' && res.roomState.gameState) {
+            setGameState(res.roomState.gameState);
+          } else if (res.roomState.gameType === 'dotsboxes' && res.roomState.dotsGameState) {
+            setDotsGameState(res.roomState.dotsGameState);
+          } else if (res.roomState.gameType === 'connectfour' && res.roomState.c4GameState) {
+            setC4GameState(res.roomState.c4GameState);
+          }
           setupRoomSubscription(res.roomState.roomCode);
+        } else {
+          clearStoredOnlineSession();
         }
       });
     }
@@ -1190,6 +1226,11 @@ export default function App() {
     setIsResultModalDismissedForReplay(false);
     setWinningMoveCoord(null);
     setWinningDotsLine(null);
+
+    if (activeMode === 'online' || roomCode) {
+      handleOnlineRematch();
+      return;
+    }
 
     if (activeGame === 'connectfour') {
       const p2 = c4GameState.mode === 'ai' ? { ...aiPlayer, isAI: true } : { ...player2, isAI: false };
@@ -1217,11 +1258,6 @@ export default function App() {
       setDotsGameState(newDots);
       setIsDotsAiThinking(false);
       setShowCountdown(true);
-      return;
-    }
-
-    if (gameState.mode === 'online') {
-      handleOnlineRematch();
       return;
     }
 
@@ -1541,6 +1577,8 @@ export default function App() {
                 score={
                   activeGame === 'dotsboxes'
                     ? (dotsGameState.playerScores[dotsGameState.players[0].id] || 0)
+                    : activeMode === 'online' && roomState
+                    ? roomState.hostPlayer.score
                     : player1.score
                 }
                 language={settings.language}
@@ -1563,6 +1601,8 @@ export default function App() {
                 score={
                   activeGame === 'dotsboxes'
                     ? (dotsGameState.playerScores[dotsGameState.players[1].id] || 0)
+                    : activeMode === 'online' && roomState && roomState.guestPlayer
+                    ? roomState.guestPlayer.score
                     : (activeMode === 'ai' ? aiPlayer.score : player2.score)
                 }
                 language={settings.language}
@@ -1661,7 +1701,7 @@ export default function App() {
             )}
 
             {/* Quick Reactions Bar (Online Mode) */}
-            {gameState.mode === 'online' && activeGame === 'tictactoe' && (
+            {activeMode === 'online' && (
               <OnlineReactions
                 onSendReaction={handleSendReaction}
                 floatingReactions={floatingReactions}
@@ -1718,7 +1758,7 @@ export default function App() {
               : gameState.moveCount
           }
           customScoreText={dotsCustomScoreText}
-          isOnlineMatch={activeGame === 'tictactoe' && gameState.mode === 'online'}
+          isOnlineMatch={activeMode === 'online' || Boolean(roomCode)}
           onRematch={handleOnlineRematch}
           rematchRequested={Boolean(roomState?.rematchRequestedBy)}
         />
