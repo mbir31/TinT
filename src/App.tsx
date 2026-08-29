@@ -34,8 +34,10 @@ import {
   subscribeToOnlineRoom,
   syncOnlineMove,
   syncOnlineRematch,
-  syncLeaveRoom
-} from './firebase/multiplayer';
+  syncLeaveRoom,
+  sendOnlineReaction,
+  ReactionPayload
+} from './engine/multiplayerEngine';
 import { soundEngine } from './engine/soundEngine';
 import { hapticsEngine } from './engine/hapticsEngine';
 import { TRANSLATIONS } from './i18n/translations';
@@ -51,10 +53,12 @@ import { PlayerCustomizer } from './components/PlayerCustomizer';
 import { SettingsModal } from './components/SettingsModal';
 import { GameResultModal } from './components/GameResultModal';
 import { OnlineLobby } from './components/OnlineLobby';
+import { OnlineReactions, FloatingReaction } from './components/OnlineReactions';
 import { CountdownOverlay } from './components/CountdownOverlay';
 import { InstallPrompt } from './components/InstallPrompt';
 import { FooterCredit } from './components/FooterCredit';
-import { RotateCcw, ArrowLeft, SlidersHorizontal, UserCheck, Sparkles } from 'lucide-react';
+import { LocalSetupModal } from './components/LocalSetupModal';
+import { RotateCcw, ArrowLeft, SlidersHorizontal, UserCheck, Sparkles, AlertTriangle } from 'lucide-react';
 
 type ScreenView = 'mode-select' | 'online-lobby' | 'playing';
 
@@ -73,6 +77,7 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showBoardModal, setShowBoardModal] = useState<boolean>(false);
   const [showCustomizerModal, setShowCustomizerModal] = useState<boolean>(false);
+  const [showLocalSetupModal, setShowLocalSetupModal] = useState<boolean>(false);
   const [showCountdown, setShowCountdown] = useState<boolean>(false);
 
   // 3. Match Config State
@@ -86,6 +91,7 @@ export default function App() {
     name: settings.defaultPlayer1.name,
     avatar: settings.defaultPlayer1.avatar,
     colorKey: settings.defaultPlayer1.colorKey,
+    photoUrl: settings.defaultPlayer1.photoUrl,
     score: 0
   });
 
@@ -94,6 +100,7 @@ export default function App() {
     name: settings.defaultPlayer2.name,
     avatar: settings.defaultPlayer2.avatar,
     colorKey: settings.defaultPlayer2.colorKey,
+    photoUrl: settings.defaultPlayer2.photoUrl,
     score: 0
   });
 
@@ -102,6 +109,7 @@ export default function App() {
     name: settings.defaultAIPlayer.name,
     avatar: settings.defaultAIPlayer.avatar,
     colorKey: settings.defaultAIPlayer.colorKey,
+    photoUrl: settings.defaultAIPlayer.photoUrl,
     isAI: true,
     score: 0
   });
@@ -121,8 +129,22 @@ export default function App() {
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [isOnlineWaiting, setIsOnlineWaiting] = useState<boolean>(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
+  const [opponentLeftAlert, setOpponentLeftAlert] = useState<boolean>(false);
+  const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [localOnlineId, setLocalOnlineId] = useState<string>('p1');
   const unsubscribeRoomRef = useRef<(() => void) | null>(null);
+
+  // Auto-detect invite link room on initial page load (e.g. ?room=XYZ12)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const inviteRoom = params.get('room') || params.get('join');
+      if (inviteRoom && inviteRoom.trim().length >= 3) {
+        setActiveMode('online');
+        setCurrentView('online-lobby');
+      }
+    }
+  }, []);
 
   const t = TRANSLATIONS[settings.language];
 
@@ -188,6 +210,52 @@ export default function App() {
       setCurrentView('online-lobby');
       setOnlineError(null);
     }
+  };
+
+  const handleStartLocalWithNames = (
+    name1: string,
+    color1: string,
+    name2: string,
+    color2: string,
+    photo1?: string,
+    photo2?: string
+  ) => {
+    const updatedP1: Player = {
+      ...player1,
+      name: name1,
+      colorKey: color1,
+      photoUrl: photo1
+    };
+    const updatedP2: Player = {
+      ...player2,
+      name: name2,
+      colorKey: color2,
+      photoUrl: photo2,
+      isAI: false
+    };
+
+    setPlayer1(updatedP1);
+    setPlayer2(updatedP2);
+
+    handleUpdateSettings({
+      ...settings,
+      defaultPlayer1: {
+        name: updatedP1.name,
+        avatar: updatedP1.avatar,
+        colorKey: updatedP1.colorKey,
+        photoUrl: updatedP1.photoUrl
+      },
+      defaultPlayer2: {
+        name: updatedP2.name,
+        avatar: updatedP2.avatar,
+        colorKey: updatedP2.colorKey,
+        photoUrl: updatedP2.photoUrl
+      }
+    });
+
+    setShowLocalSetupModal(false);
+    setActiveMode('local');
+    startNewGameWithPlayers('local', updatedP1, updatedP2, boardConfig);
   };
 
   const handleCountdownComplete = () => {
@@ -364,11 +432,33 @@ export default function App() {
   // ----------------------------------------------------
   // Online Multiplayer Room Management
   // ----------------------------------------------------
+  const handleIncomingReaction = useCallback((reaction: ReactionPayload) => {
+    soundEngine.playTap();
+    hapticsEngine.trigger('tap');
+    const newReaction: FloatingReaction = {
+      id: `react_${Date.now()}_${Math.random()}`,
+      emoji: reaction.emoji,
+      senderName: reaction.senderName,
+      xOffset: (Math.random() - 0.5) * 160
+    };
+    setFloatingReactions((prev) => [...prev, newReaction]);
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+    }, 2200);
+  }, []);
+
+  const handleSendReaction = (emoji: string) => {
+    if (!roomCode || !roomState) return;
+    const sender = roomState.hostPlayer.id === localOnlineId ? roomState.hostPlayer : (roomState.guestPlayer || player1);
+    sendOnlineReaction(roomCode, emoji, sender.name, localOnlineId);
+  };
+
   const handleCreateOnlineRoom = async () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
     try {
       setIsOnlineWaiting(true);
+      setOpponentLeftAlert(false);
       const hostP: Player = { ...player1, score: 0 };
       const { roomCode: code, roomState: initialRoom } = await createOnlineRoom(hostP, boardConfig);
       setRoomCode(code);
@@ -379,16 +469,23 @@ export default function App() {
         unsubscribeRoomRef.current();
       }
 
-      unsubscribeRoomRef.current = subscribeToOnlineRoom(code, (updatedRoom) => {
-        setRoomState(updatedRoom);
-        if (updatedRoom.guestPlayer && updatedRoom.status === 'active') {
-          setIsOnlineWaiting(false);
-          setGameState(updatedRoom.gameState);
-          setCurrentView('playing');
-        } else if (updatedRoom.gameState) {
-          setGameState(updatedRoom.gameState);
+      unsubscribeRoomRef.current = subscribeToOnlineRoom(
+        code,
+        (updatedRoom) => {
+          setRoomState(updatedRoom);
+          if (updatedRoom.guestPlayer && updatedRoom.status === 'active') {
+            setIsOnlineWaiting(false);
+            setGameState(updatedRoom.gameState);
+            setCurrentView('playing');
+          } else if (updatedRoom.gameState) {
+            setGameState(updatedRoom.gameState);
+          }
+        },
+        handleIncomingReaction,
+        () => {
+          setOpponentLeftAlert(true);
         }
-      });
+      );
     } catch (err) {
       console.error(err);
       setIsOnlineWaiting(false);
@@ -400,6 +497,7 @@ export default function App() {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
     try {
+      setOpponentLeftAlert(false);
       const guestP: Player = { ...player2, score: 0 };
       const result = await joinOnlineRoom(code, guestP);
 
@@ -418,12 +516,19 @@ export default function App() {
         unsubscribeRoomRef.current();
       }
 
-      unsubscribeRoomRef.current = subscribeToOnlineRoom(code, (updatedRoom) => {
-        setRoomState(updatedRoom);
-        if (updatedRoom.gameState) {
-          setGameState(updatedRoom.gameState);
+      unsubscribeRoomRef.current = subscribeToOnlineRoom(
+        code,
+        (updatedRoom) => {
+          setRoomState(updatedRoom);
+          if (updatedRoom.gameState) {
+            setGameState(updatedRoom.gameState);
+          }
+        },
+        handleIncomingReaction,
+        () => {
+          setOpponentLeftAlert(true);
         }
-      });
+      );
     } catch (err) {
       console.error(err);
       setOnlineError('roomNotFound');
@@ -441,6 +546,7 @@ export default function App() {
     setRoomCode(null);
     setRoomState(null);
     setIsOnlineWaiting(false);
+    setOpponentLeftAlert(false);
     setCurrentView('mode-select');
   };
 
@@ -498,9 +604,38 @@ export default function App() {
 
     handleUpdateSettings({
       ...settings,
-      defaultPlayer1: { name: p1.name, avatar: p1.avatar, colorKey: p1.colorKey },
-      defaultPlayer2: { name: p2.name, avatar: p2.avatar, colorKey: p2.colorKey },
-      defaultAIPlayer: { name: ai.name, avatar: ai.avatar, colorKey: ai.colorKey }
+      defaultPlayer1: {
+        name: p1.name,
+        avatar: p1.avatar,
+        colorKey: p1.colorKey,
+        photoUrl: p1.photoUrl
+      },
+      defaultPlayer2: {
+        name: p2.name,
+        avatar: p2.avatar,
+        colorKey: p2.colorKey,
+        photoUrl: p2.photoUrl
+      },
+      defaultAIPlayer: {
+        name: ai.name,
+        avatar: ai.avatar,
+        colorKey: ai.colorKey,
+        photoUrl: ai.photoUrl
+      }
+    });
+
+    // Also update players in active gameState if exists
+    setGameState((prev) => {
+      const updatedPlayers = prev.players.map((p) => {
+        if (p.id === p1.id) return { ...p, name: p1.name, avatar: p1.avatar, colorKey: p1.colorKey, photoUrl: p1.photoUrl };
+        if (p.id === p2.id) return { ...p, name: p2.name, avatar: p2.avatar, colorKey: p2.colorKey, photoUrl: p2.photoUrl };
+        if (p.id === ai.id) return { ...p, name: ai.name, avatar: ai.avatar, colorKey: ai.colorKey, photoUrl: ai.photoUrl };
+        return p;
+      });
+      return {
+        ...prev,
+        players: updatedPlayers
+      };
     });
   };
 
@@ -554,6 +689,9 @@ export default function App() {
             onOpenCustomizer={() => setShowCustomizerModal(true)}
             onOpenBoardPicker={() => setShowBoardModal(true)}
             boardLabel={getBoardPresetLabel()}
+            player1={player1}
+            player2={player2}
+            onOpenLocalSetup={() => setShowLocalSetupModal(true)}
           />
         )}
 
@@ -574,37 +712,56 @@ export default function App() {
 
         {/* 3. ACTIVE GAME PLAYING SCREEN */}
         {currentView === 'playing' && (
-          <div className="w-full max-w-4xl mx-auto px-4 flex flex-col items-center gap-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 flex flex-col items-center gap-2 sm:gap-3 animate-in fade-in duration-200">
             {/* Top Game Bar: Back, Board Tag, Settings */}
-            <div className="w-full flex items-center justify-between py-1">
+            <div className="w-full max-w-xl flex items-center justify-between gap-1.5 py-1">
               <button
                 id="btn-back-to-modes"
                 onClick={handleGoHome}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-white border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl bg-white border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 transition-all flex-shrink-0"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span>{t.home}</span>
+                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="text-[11px] sm:text-xs">{t.home}</span>
               </button>
 
               {/* Board Spec Pill */}
-              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#118AB2] text-white border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] text-xs font-black">
+              <div className="flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full bg-[#118AB2] text-white border-2 border-[#073B4C] shadow-[1.5px_1.5px_0px_0px_#073B4C] text-[10px] sm:text-xs font-black truncate max-w-[130px] sm:max-w-none text-center">
                 <span>{getBoardPresetLabel()}</span>
               </div>
 
-              {/* Quick Reset Button */}
-              <button
-                id="btn-quick-restart"
-                onClick={handlePlayAgain}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-[#FFD166] border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
-                title={t.playAgain}
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span className="hidden sm:inline">{t.playAgain}</span>
-              </button>
+              {/* Action Buttons: Edit / Play Again */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <button
+                  id="btn-edit-players-in-game"
+                  onClick={() => {
+                    soundEngine.playTap();
+                    if (gameState.mode === 'local') {
+                      setShowLocalSetupModal(true);
+                    } else {
+                      setShowCustomizerModal(true);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl sm:rounded-2xl bg-white border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 transition-all"
+                  title={settings.language === 'bn' ? 'খেলোয়াড়ের নাম পরিবর্তন' : 'Change Player Names'}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline text-[11px] sm:text-xs">{settings.language === 'bn' ? 'নাম' : 'Names'}</span>
+                </button>
+
+                <button
+                  id="btn-quick-restart"
+                  onClick={handlePlayAgain}
+                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl sm:rounded-2xl bg-[#FFD166] border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 transition-all"
+                  title={t.playAgain}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline text-[11px] sm:text-xs">{t.playAgain}</span>
+                </button>
+              </div>
             </div>
 
             {/* Players Status & Score HUD */}
-            <div className="w-full grid grid-cols-2 gap-3 sm:gap-6 my-1 max-w-xl">
+            <div className="w-full grid grid-cols-2 gap-2 sm:gap-4 my-0.5 max-w-xl">
               <PlayerBadge
                 player={gameState.players[0]}
                 isCurrentTurn={gameState.currentPlayerIndex === 0 && gameState.status === 'playing'}
@@ -628,6 +785,26 @@ export default function App() {
               />
             )}
 
+            {/* Opponent Left Alert Banner */}
+            {opponentLeftAlert && (
+              <div className="w-full max-w-xl p-3 rounded-2xl bg-amber-100 border-2 border-[#EF476F] shadow-[3px_3px_0px_0px_#073B4C] flex items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2 text-xs font-black text-[#073B4C]">
+                  <AlertTriangle className="w-5 h-5 text-[#EF476F] flex-shrink-0" />
+                  <span>
+                    {settings.language === 'bn'
+                      ? 'প্রতিপক্ষ খেলা ত্যাগ করেছে বা সংযোগ বিচ্ছিন্ন হয়েছে।'
+                      : 'Opponent has left or disconnected from the match.'}
+                  </span>
+                </div>
+                <button
+                  onClick={handleGoHome}
+                  className="px-3 py-1.5 rounded-xl bg-[#EF476F] text-white text-xs font-black border border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5"
+                >
+                  {t.home}
+                </button>
+              </div>
+            )}
+
             {/* Interactive 3D Board */}
             <GameBoard
               board={gameState.board}
@@ -641,6 +818,14 @@ export default function App() {
               tiltEnabled={settings.tilt3dEnabled && !settings.reducedMotion}
               language={settings.language}
             />
+
+            {/* Quick Reactions Bar (Online Mode) */}
+            {gameState.mode === 'online' && (
+              <OnlineReactions
+                onSendReaction={handleSendReaction}
+                floatingReactions={floatingReactions}
+              />
+            )}
           </div>
         )}
       </main>
@@ -666,6 +851,17 @@ export default function App() {
           isOnlineMatch={gameState.mode === 'online'}
           onRematch={handleOnlineRematch}
           rematchRequested={Boolean(roomState?.rematchRequestedBy)}
+        />
+      )}
+
+      {/* Local 2-Player Setup Modal */}
+      {showLocalSetupModal && (
+        <LocalSetupModal
+          player1={player1}
+          player2={player2}
+          onStartGame={handleStartLocalWithNames}
+          onClose={() => setShowLocalSetupModal(false)}
+          language={settings.language}
         />
       )}
 

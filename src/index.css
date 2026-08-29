@@ -13,7 +13,7 @@
   body {
     background-color: #FFF9F0;
     color: #2D3436;
-    font-family: 'Hind Siliguri', 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: 'Noto Serif Bengali', 'Outfit', 'Plus Jakarta Sans', Georgia, serif;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
@@ -60,7 +60,12 @@
 
 .board-3d-surface {
   transform-style: preserve-3d;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.45s cubic-bezier(0.34, 1.35, 0.64, 1);
+  will-change: transform;
+}
+
+.board-cell-content {
+  transition: transform 0.45s cubic-bezier(0.34, 1.35, 0.64, 1);
 }
 
 .token-3d-drop {

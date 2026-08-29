@@ -25,6 +25,7 @@ export interface Player {
   name: string;
   avatar: string; // icon key or symbol
   colorKey: string; // theme color key
+  photoUrl?: string; // custom cropped photo data URL
   isAI?: boolean;
   score: number;
 }
@@ -94,16 +95,19 @@ export interface UserSettings {
     name: string;
     avatar: string;
     colorKey: string;
+    photoUrl?: string;
   };
   defaultPlayer2: {
     name: string;
     avatar: string;
     colorKey: string;
+    photoUrl?: string;
   };
   defaultAIPlayer: {
     name: string;
     avatar: string;
     colorKey: string;
+    photoUrl?: string;
   };
   defaultDifficulty: AIDifficulty;
   lastBoardConfig: BoardConfig;

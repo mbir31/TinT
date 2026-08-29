@@ -62,12 +62,21 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
 
         {status === 'won' && winner && winnerTheme ? (
           <>
-            {/* Winner Trophy Icon with Avatar */}
+            {/* Winner Trophy Icon with Avatar or Photo */}
             <div className="relative z-10">
               <div
-                className={`w-20 h-20 rounded-3xl bg-gradient-to-br ${winnerTheme.gradient} border-4 border-[#073B4C] shadow-[6px_6px_0px_0px_#073B4C] flex items-center justify-center text-white rotate-3`}
+                className={`w-20 h-20 rounded-3xl bg-gradient-to-br ${winnerTheme.gradient} border-4 border-[#073B4C] shadow-[6px_6px_0px_0px_#073B4C] flex items-center justify-center text-white rotate-3 overflow-hidden`}
               >
-                <AvatarIcon name={winner.avatar} className="w-10 h-10 drop-shadow-md" />
+                {winner.photoUrl ? (
+                  <img
+                    src={winner.photoUrl}
+                    alt={winner.name}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <AvatarIcon name={winner.avatar} className="w-10 h-10 drop-shadow-md" />
+                )}
               </div>
               <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-[#FFD166] border-2 border-[#073B4C] flex items-center justify-center text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C]">
                 <Trophy className="w-4 h-4" />

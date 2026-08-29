@@ -6,7 +6,10 @@
 import React, { useState, useRef, memo } from 'react';
 import { BoardState, Player, CellCoord, Language } from '../types';
 import { PLAYER_THEMES } from '../constants/themes';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { TRANSLATIONS } from '../i18n/translations';
+import { soundEngine } from '../engine/soundEngine';
+import { hapticsEngine } from '../engine/hapticsEngine';
+import { ZoomIn, ZoomOut, RotateCcw, RotateCw, Compass } from 'lucide-react';
 
 interface GameBoardProps {
   board: BoardState;
@@ -28,29 +31,33 @@ const getPlayerNameStyles = (name: string, rows: number) => {
   const len = name ? name.length : 0;
   
   if (rows <= 3) {
-    if (len <= 4) return 'text-xl sm:text-2xl font-black tracking-wide';
-    if (len <= 7) return 'text-base sm:text-lg font-black tracking-normal';
-    if (len <= 10) return 'text-xs sm:text-sm font-black tracking-tight leading-tight';
-    return 'text-[11px] sm:text-xs font-black tracking-tighter leading-none';
+    if (len <= 4) return 'text-lg xs:text-xl sm:text-2xl font-black tracking-wide';
+    if (len <= 7) return 'text-xs xs:text-sm sm:text-lg font-black tracking-normal';
+    if (len <= 10) return 'text-[10px] xs:text-xs sm:text-sm font-black tracking-tight leading-tight';
+    return 'text-[9px] xs:text-[11px] sm:text-xs font-black tracking-tighter leading-none';
   }
   
   if (rows <= 4) {
-    if (len <= 4) return 'text-sm sm:text-base font-black tracking-wide';
-    if (len <= 7) return 'text-xs sm:text-sm font-black tracking-normal leading-tight';
-    return 'text-[10px] sm:text-xs font-black tracking-tighter leading-none';
+    if (len <= 4) return 'text-xs xs:text-sm sm:text-base font-black tracking-wide';
+    if (len <= 7) return 'text-[10px] xs:text-xs sm:text-sm font-black tracking-normal leading-tight';
+    return 'text-[9px] xs:text-[10px] sm:text-xs font-black tracking-tighter leading-none';
   }
   
+  if (rows <= 5) {
+    if (len <= 4) return 'text-[10px] xs:text-xs sm:text-sm font-black';
+    return 'text-[8px] xs:text-[9px] sm:text-[10px] font-black tracking-tighter leading-none';
+  }
+
   if (rows <= 6) {
-    if (len <= 4) return 'text-xs sm:text-sm font-black';
-    return 'text-[9px] sm:text-[10px] font-black tracking-tighter leading-none';
+    return 'text-[8px] xs:text-[9px] sm:text-[10px] font-black tracking-tighter leading-none';
   }
   
   // For large grids (7x7+)
   if (rows <= 8) {
-    return 'text-[9px] sm:text-[10px] font-black';
+    return 'text-[8px] sm:text-[9px] font-black leading-none';
   }
   
-  return 'text-[8px] font-black';
+  return 'text-[7px] sm:text-[8px] font-black leading-none';
 };
 
 /**
@@ -58,9 +65,9 @@ const getPlayerNameStyles = (name: string, rows: number) => {
  */
 const formatCellName = (name: string, rows: number): string => {
   if (!name) return '';
-  if (rows <= 5) return name;
-  if (rows <= 7) return name.length > 5 ? name.slice(0, 5) : name;
-  // Compact abbreviation for large grids 8x8 to 15x15
+  if (rows <= 4) return name;
+  if (rows <= 6) return name.length > 5 ? name.slice(0, 5) : name;
+  // Compact abbreviation for large grids 7x7 to 15x15
   return name.length > 3 ? name.slice(0, 3).toUpperCase() : name.toUpperCase();
 };
 
@@ -73,11 +80,14 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
   winningCells,
   lastMove,
   disabled = false,
-  tiltEnabled = true
+  tiltEnabled = true,
+  language
 }) => {
+  const t = TRANSLATIONS[language];
   const rows = board.length;
   const cols = board[0]?.length || 3;
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [rotationAngle, setRotationAngle] = useState<number>(0);
   const boardRef = useRef<HTMLDivElement>(null);
 
   const isWinningCell = (r: number, c: number): boolean => {
@@ -87,70 +97,108 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
 
   const isLargeBoard = rows > 6 || cols > 6;
 
-  // Determine cell sizing based on board dimensions
+  // Rotate perspective by 90 degrees clockwise
+  const handleRotate90 = () => {
+    soundEngine.playTap();
+    hapticsEngine.trigger('tap');
+    setRotationAngle((prev) => prev + 90);
+  };
+
+  // Reset rotation and zoom
+  const handleResetPerspective = () => {
+    soundEngine.playTap();
+    hapticsEngine.trigger('tap');
+    setRotationAngle(0);
+    setZoomLevel(1);
+  };
+
+  // Determine responsive cell sizing based on board dimensions
   const getCellSizeClass = () => {
-    if (rows <= 3) return 'w-20 h-20 sm:w-26 sm:h-26';
-    if (rows <= 4) return 'w-16 h-16 sm:w-20 sm:h-20';
-    if (rows <= 6) return 'w-12 h-12 sm:w-14 sm:h-14';
-    if (rows <= 8) return 'w-10 h-10 sm:w-12 sm:h-12';
-    if (rows <= 10) return 'w-8 h-8 sm:w-10 sm:h-10';
-    return 'w-7 h-7 sm:w-8 sm:h-8';
+    if (rows <= 3) return 'w-[72px] h-[72px] xs:w-[84px] xs:h-[84px] sm:w-26 sm:h-26';
+    if (rows <= 4) return 'w-[54px] h-[54px] xs:w-[62px] xs:h-[62px] sm:w-20 sm:h-20';
+    if (rows <= 5) return 'w-[44px] h-[44px] xs:w-[50px] xs:h-[50px] sm:w-16 sm:h-16';
+    if (rows <= 6) return 'w-[36px] h-[36px] xs:w-[42px] xs:h-[42px] sm:w-13 sm:h-13';
+    if (rows <= 8) return 'w-[30px] h-[30px] xs:w-[34px] xs:h-[34px] sm:w-11 sm:h-11';
+    if (rows <= 10) return 'w-[26px] h-[26px] xs:w-[28px] xs:h-[28px] sm:w-9 sm:h-9';
+    return 'w-[22px] h-[22px] sm:w-8 sm:h-8';
   };
 
   const currentTheme = PLAYER_THEMES[currentPlayer.colorKey] || PLAYER_THEMES.blue;
+  const currentAngleNormalized = ((rotationAngle % 360) + 360) % 360;
 
   return (
-    <div className="relative w-full flex flex-col items-center justify-center p-2 sm:p-4 select-none">
-      {/* Zoom / Reset Controls for large boards */}
-      {isLargeBoard && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-1.5 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] z-10">
-          <button
-            onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.15))}
-            className="p-1.5 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
-            title="Zoom Out"
-            aria-label="Zoom Out"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-          <span className="text-xs font-black text-[#073B4C] min-w-10 text-center">
-            {Math.round(zoomLevel * 100)}%
+    <div className="relative w-full max-w-full flex flex-col items-center justify-center p-1 sm:p-3 select-none overflow-x-hidden">
+      {/* 3D Perspective & Zoom Control Bar */}
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 px-3 py-1.5 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[2.5px_2.5px_0px_0px_#073B4C] z-10 animate-in fade-in">
+        {/* 90-Degree Rotation Button */}
+        <button
+          id="btn-rotate-board-90"
+          type="button"
+          onClick={handleRotate90}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#FFF9F0] border border-[#073B4C] text-[#073B4C] hover:bg-amber-100 active:scale-95 active:translate-y-0.5 transition-all text-xs font-black cursor-pointer shadow-sm"
+          title={t.rotate3d || 'Rotate 3D Board (90°)'}
+          aria-label="Rotate 3D Board by 90 degrees"
+        >
+          <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#118AB2] transition-transform duration-300" />
+          <span className="hidden xs:inline">{t.rotate3dShort || 'Rotate 90°'}</span>
+          <span className="px-1.5 py-0.2 rounded-md bg-white border border-[#073B4C]/30 text-[10px] sm:text-[11px] font-mono text-[#073B4C]">
+            {currentAngleNormalized}°
           </span>
-          <button
-            onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.15))}
-            className="p-1.5 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
-            title="Zoom In"
-            aria-label="Zoom In"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setZoomLevel(1)}
-            className="p-1.5 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors border-l border-[#073B4C]/20 ml-1"
-            title="Reset Zoom"
-            aria-label="Reset Zoom"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+        </button>
 
-      {/* 3D Board Stage */}
+        {/* Large Board Zoom Controls */}
+        {isLargeBoard && (
+          <div className="flex items-center gap-1 border-l border-[#073B4C]/20 pl-1.5">
+            <button
+              onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.15))}
+              className="p-1 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
+              title={t.zoomOut || 'Zoom Out'}
+              aria-label="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+            <span className="text-[11px] sm:text-xs font-black text-[#073B4C] min-w-7 text-center">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.15))}
+              className="p-1 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
+              title={t.zoomIn || 'Zoom In'}
+              aria-label="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Reset Perspective & View Button (when rotated or zoomed) */}
+        {(rotationAngle !== 0 || zoomLevel !== 1) && (
+          <button
+            onClick={handleResetPerspective}
+            className="p-1 rounded-xl text-[#073B4C] hover:bg-amber-100 transition-colors border-l border-[#073B4C]/20 pl-1.5"
+            title={t.resetView || 'Reset View'}
+            aria-label="Reset View"
+          >
+            <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#EF476F]" />
+          </button>
+        )}
+      </div>
+
+      {/* 3D Board Stage with safe scroll handling */}
       <div
-        className="board-3d-stage max-w-full overflow-auto p-3 sm:p-4 flex items-center justify-center"
+        className="board-3d-stage max-w-full overflow-x-auto overflow-y-hidden p-2 sm:p-4 flex items-center justify-center"
         style={{ touchAction: isLargeBoard ? 'pan-x pan-y' : 'manipulation' }}
       >
         <div
           ref={boardRef}
           style={{
-            transform: `scale(${zoomLevel})`,
+            transform: `rotateX(${tiltEnabled ? 12 : 0}deg) rotateZ(${rotationAngle}deg) scale(${zoomLevel})`,
             transformOrigin: 'center center'
           }}
-          className={`board-3d-surface bg-[#FFFDF9] p-3 sm:p-5 rounded-[28px] border-4 border-[#073B4C] shadow-[8px_8px_0px_0px_#073B4C] ${
-            tiltEnabled && !isLargeBoard ? 'hover:rotate-x-2' : ''
-          }`}
+          className={`board-3d-surface bg-[#FFFDF9] p-2 sm:p-4 rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] shadow-[5px_5px_0px_0px_#073B4C] sm:shadow-[8px_8px_0px_0px_#073B4C]`}
         >
           <div
-            className="grid gap-2 sm:gap-2.5"
+            className="grid gap-1.5 sm:gap-2.5"
             style={{
               gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`
             }}
@@ -185,11 +233,11 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                     }}
                     className={`
                       ${getCellSizeClass()}
-                      group relative flex items-center justify-center rounded-2xl border-2 sm:border-3 p-1
+                      group relative flex items-center justify-center rounded-xl sm:rounded-2xl border-2 sm:border-3 p-0.5 sm:p-1
                       ${
                         cell === null
-                          ? 'bg-[#FFF9F0] border-[#073B4C] hover:bg-amber-50 active:translate-y-0.5 shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
-                          : 'bg-white border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C] cursor-default'
+                          ? 'bg-[#FFF9F0] border-[#073B4C] hover:bg-amber-50 active:translate-y-0.5 shadow-[1.5px_1.5px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
+                          : 'bg-white border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] cursor-default'
                       }
                       ${isWinning ? 'cell-winning-glow !border-[#06D6A0] !bg-emerald-50 scale-105 z-10' : ''}
                       ${isLast && !isWinning ? 'ring-2 sm:ring-3 ring-[#FFD166]' : ''}
@@ -200,45 +248,76 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                         : `Empty cell row ${r + 1}, column ${c + 1}`
                     }
                   >
-                    {/* Render Player Name as the Game Piece */}
+                    {/* Render Player Photo OR Name as the Game Piece with counter-rotation for upright visibility */}
                     {cell && cellOwner && ownerTheme && (
                       <div
-                        className={`token-3d-drop w-full h-full rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] ${textColorClass}`}
+                        className={`board-cell-content token-3d-drop w-full h-full rounded-lg sm:rounded-xl overflow-hidden flex flex-col items-center justify-center p-0.5 sm:p-1 border border-[#073B4C] sm:border-2 shadow-[1px_1px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] ${textColorClass}`}
                         style={{
-                          backgroundColor: ownerTheme.primary
+                          backgroundColor: ownerTheme.primary,
+                          transform: `rotateZ(${-rotationAngle}deg)`,
+                          transformOrigin: 'center center'
                         }}
                       >
-                        <span
-                          className={`truncate max-w-full text-center select-none ${nameStyleClass}`}
-                          title={cellOwner.name}
-                        >
-                          {cellDisplayName}
-                        </span>
+                        {cellOwner.photoUrl ? (
+                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden relative flex items-center justify-center bg-white border border-[#073B4C]">
+                            <img
+                              src={cellOwner.photoUrl}
+                              alt={cellOwner.name}
+                              className="w-full h-full object-cover select-none pointer-events-none"
+                              referrerPolicy="no-referrer"
+                            />
+                            {/* Tiny theme border accent inside */}
+                            <div
+                              className="absolute inset-0 ring-1 sm:ring-2 pointer-events-none rounded-[6px] sm:rounded-lg opacity-80"
+                              style={{ borderColor: ownerTheme.primary }}
+                            />
+                          </div>
+                        ) : (
+                          <span
+                            className={`truncate max-w-full text-center select-none ${nameStyleClass}`}
+                            title={cellOwner.name}
+                          >
+                            {cellDisplayName}
+                          </span>
+                        )}
                       </div>
                     )}
 
-                    {/* Pure CSS Ghost Hover Token Preview (Zero JS re-render overhead) */}
+                    {/* Pure CSS Ghost Hover Token Preview */}
                     {cell === null && !disabled && (
                       <div
-                        className="opacity-0 group-hover:opacity-40 w-full h-full rounded-xl sm:rounded-2xl flex items-center justify-center p-1 border-2 border-dashed border-[#073B4C] pointer-events-none transition-opacity duration-75"
+                        className="board-cell-content opacity-0 group-hover:opacity-40 w-full h-full rounded-lg sm:rounded-xl overflow-hidden flex items-center justify-center p-0.5 sm:p-1 border border-dashed border-[#073B4C] pointer-events-none transition-opacity duration-75"
                         style={{
-                          backgroundColor: currentTheme.primary
+                          backgroundColor: currentTheme.primary,
+                          transform: `rotateZ(${-rotationAngle}deg)`,
+                          transformOrigin: 'center center'
                         }}
                       >
-                        <span
-                          className={`truncate max-w-full text-center text-[#073B4C] select-none ${getPlayerNameStyles(
-                            formatCellName(currentPlayer.name, rows),
-                            rows
-                          )}`}
-                        >
-                          {formatCellName(currentPlayer.name, rows)}
-                        </span>
+                        {currentPlayer.photoUrl ? (
+                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden flex items-center justify-center bg-white">
+                            <img
+                              src={currentPlayer.photoUrl}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        ) : (
+                          <span
+                            className={`truncate max-w-full text-center text-[#073B4C] select-none ${getPlayerNameStyles(
+                              formatCellName(currentPlayer.name, rows),
+                              rows
+                            )}`}
+                          >
+                            {formatCellName(currentPlayer.name, rows)}
+                          </span>
+                        )}
                       </div>
                     )}
 
                     {/* Last Move Accent Dot */}
                     {isLast && !isWinning && (
-                      <span className="absolute top-1 right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#FFD166] border border-[#073B4C] pointer-events-none z-10" />
+                      <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-1.5 h-1.5 sm:w-2.5 sm:h-2.5 rounded-full bg-[#FFD166] border border-[#073B4C] pointer-events-none z-10" />
                     )}
                   </button>
                 );

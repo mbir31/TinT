@@ -60,6 +60,16 @@ export const TRANSLATIONS = {
     playerNamePlaceholder: 'খেলোয়াড়ের নাম লিখুন',
     avatarSelection: 'চিহ্ন / অবতার',
     colorTheme: 'রঙের থিম',
+    customPhoto: 'কাস্টম ছবি (Custom Photo)',
+    uploadPhoto: 'ছবি আপলোড করুন',
+    changePhoto: 'ছবি পরিবর্তন',
+    removePhoto: 'ছবি মুছুন',
+    cropPhotoTitle: 'ছবি ক্রপ ও পজিশন করুন',
+    cropInstruction: 'ড্র্যাগ করে ছবি সরান ও জুম স্লাইডার দিয়ে নিখুঁত সাইজ করুন',
+    applyCrop: 'ক্রপ সম্পন্ন করুন',
+    rotatePhoto: 'ঘোরান ( Rotate )',
+    dropPhotoHere: 'ছবিটি এখানে টেনে আনুন বা ক্লিক করুন',
+    photoActive: 'ছবি বোর্ডের ঘুঁটিতে ব্যবহার হচ্ছে',
     
     // Game Play
     turnOf: 'এর চাল',
@@ -78,6 +88,8 @@ export const TRANSLATIONS = {
     zoomIn: 'জুম ইন',
     zoomOut: 'জুম আউট',
     resetView: 'ভিউ রিসেট',
+    rotate3d: '৩ডি দৃষ্টিকোণ ঘোরান (Rotate 90°)',
+    rotate3dShort: '৯০° ঘোরান',
     restartMatch: 'ম্যাচ রিস্টার্ট',
     
     // Countdown
@@ -179,6 +191,16 @@ export const TRANSLATIONS = {
     playerNamePlaceholder: 'Enter player name',
     avatarSelection: 'Token / Emblem',
     colorTheme: 'Color Theme',
+    customPhoto: 'Player Photo',
+    uploadPhoto: 'Upload Photo',
+    changePhoto: 'Change Photo',
+    removePhoto: 'Remove Photo',
+    cropPhotoTitle: 'Crop & Position Photo',
+    cropInstruction: 'Drag to reposition, adjust zoom slider, then apply crop',
+    applyCrop: 'Apply & Save Crop',
+    rotatePhoto: 'Rotate',
+    dropPhotoHere: 'Drag & drop image here or click to browse',
+    photoActive: 'Photo will be carved onto 3D board pieces',
     
     // Game Play
     turnOf: "'s Turn",
@@ -197,6 +219,8 @@ export const TRANSLATIONS = {
     zoomIn: 'Zoom In',
     zoomOut: 'Zoom Out',
     resetView: 'Reset View',
+    rotate3d: 'Rotate 3D Board (90°)',
+    rotate3dShort: 'Rotate 90°',
     restartMatch: 'Restart Match',
     
     // Countdown
