@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, memo } from 'react';
+import React, { useState, useRef, useCallback, memo } from 'react';
 import { BoardState, Player, CellCoord, Language } from '../types';
 import { PLAYER_THEMES } from '../constants/themes';
 import { TRANSLATIONS } from '../i18n/translations';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
-import { ZoomIn, ZoomOut, RotateCcw, RotateCw, Compass } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, RotateCw } from 'lucide-react';
 
 interface GameBoardProps {
   board: BoardState;
@@ -90,6 +90,10 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
   const [rotationAngle, setRotationAngle] = useState<number>(0);
   const boardRef = useRef<HTMLDivElement>(null);
 
+  // High-performance instant tap tracking to prevent missed/delayed clicks on mobile & touchscreens
+  const lastTriggerTimeRef = useRef<number>(0);
+  const pointerStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
   const isWinningCell = (r: number, c: number): boolean => {
     if (!winningCells || winningCells.length === 0) return false;
     return winningCells.some((cell) => cell.row === r && cell.col === c);
@@ -110,6 +114,38 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
     hapticsEngine.trigger('tap');
     setRotationAngle(0);
     setZoomLevel(1);
+  };
+
+  // Instant move trigger with debounce protection
+  const triggerMove = useCallback((r: number, c: number) => {
+    if (disabled || board[r]?.[c] !== null) return;
+    const now = Date.now();
+    if (now - lastTriggerTimeRef.current < 160) return; // Prevent duplicate rapid firings
+    lastTriggerTimeRef.current = now;
+    onCellClick(r, c);
+  }, [disabled, board, onCellClick]);
+
+  // Pointer down tracking for ultra-responsive tap handling on mobile
+  const handlePointerDown = (e: React.PointerEvent) => {
+    pointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      time: Date.now()
+    };
+  };
+
+  // Pointer up handler: triggers immediately on release without waiting for browser click synthetic delays
+  const handlePointerUp = (r: number, c: number, e: React.PointerEvent) => {
+    if (!pointerStartRef.current) return;
+    const dx = Math.abs(e.clientX - pointerStartRef.current.x);
+    const dy = Math.abs(e.clientY - pointerStartRef.current.y);
+    const dt = Date.now() - pointerStartRef.current.time;
+    pointerStartRef.current = null;
+
+    // If movement is tiny (< 12px) and fast (< 600ms), execute move immediately on the 1st tap!
+    if (dx < 12 && dy < 12 && dt < 600) {
+      triggerMove(r, c);
+    }
   };
 
   // Determine responsive cell sizing based on board dimensions
@@ -227,16 +263,16 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                     id={`cell-${r}-${c}`}
                     type="button"
                     disabled={disabled || cell !== null}
-                    onClick={() => {
-                      if (disabled || cell !== null) return;
-                      onCellClick(r, c);
-                    }}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={(e) => handlePointerUp(r, c, e)}
+                    onClick={() => triggerMove(r, c)}
+                    style={{ touchAction: 'manipulation' }}
                     className={`
                       ${getCellSizeClass()}
-                      group relative flex items-center justify-center rounded-xl sm:rounded-2xl border-2 sm:border-3 p-0.5 sm:p-1
+                      group relative flex items-center justify-center rounded-xl sm:rounded-2xl border-2 sm:border-3 p-0.5 sm:p-1 select-none transition-transform
                       ${
                         cell === null
-                          ? 'bg-[#FFF9F0] border-[#073B4C] hover:bg-amber-50 active:translate-y-0.5 shadow-[1.5px_1.5px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
+                          ? 'bg-[#FFF9F0] border-[#073B4C] active:scale-95 active:bg-amber-100 shadow-[1.5px_1.5px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
                           : 'bg-white border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] cursor-default'
                       }
                       ${isWinning ? 'cell-winning-glow !border-[#06D6A0] !bg-emerald-50 scale-105 z-10' : ''}
@@ -251,7 +287,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                     {/* Render Player Photo OR Name as the Game Piece with counter-rotation for upright visibility */}
                     {cell && cellOwner && ownerTheme && (
                       <div
-                        className={`board-cell-content token-3d-drop w-full h-full rounded-lg sm:rounded-xl overflow-hidden flex flex-col items-center justify-center p-0.5 sm:p-1 border border-[#073B4C] sm:border-2 shadow-[1px_1px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] ${textColorClass}`}
+                        className={`board-cell-content token-3d-drop w-full h-full rounded-lg sm:rounded-xl overflow-hidden flex flex-col items-center justify-center p-0.5 sm:p-1 border border-[#073B4C] sm:border-2 shadow-[1px_1px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] pointer-events-none ${textColorClass}`}
                         style={{
                           backgroundColor: ownerTheme.primary,
                           transform: `rotateZ(${-rotationAngle}deg)`,
@@ -259,14 +295,14 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                         }}
                       >
                         {cellOwner.photoUrl ? (
-                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden relative flex items-center justify-center bg-white border border-[#073B4C]">
+                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden relative flex items-center justify-center bg-white border border-[#073B4C] pointer-events-none">
                             <img
                               src={cellOwner.photoUrl}
                               alt={cellOwner.name}
                               className="w-full h-full object-cover select-none pointer-events-none"
                               referrerPolicy="no-referrer"
                             />
-                            {/* Tiny theme border accent inside */}
+                            {/* Theme border accent inside */}
                             <div
                               className="absolute inset-0 ring-1 sm:ring-2 pointer-events-none rounded-[6px] sm:rounded-lg opacity-80"
                               style={{ borderColor: ownerTheme.primary }}
@@ -274,7 +310,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                           </div>
                         ) : (
                           <span
-                            className={`truncate max-w-full text-center select-none ${nameStyleClass}`}
+                            className={`truncate max-w-full text-center select-none pointer-events-none ${nameStyleClass}`}
                             title={cellOwner.name}
                           >
                             {cellDisplayName}
@@ -283,10 +319,10 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                       </div>
                     )}
 
-                    {/* Pure CSS Ghost Hover Token Preview */}
+                    {/* Ghost Hover Token Preview (Only on devices that support actual cursor hover) */}
                     {cell === null && !disabled && (
                       <div
-                        className="board-cell-content opacity-0 group-hover:opacity-40 w-full h-full rounded-lg sm:rounded-xl overflow-hidden flex items-center justify-center p-0.5 sm:p-1 border border-dashed border-[#073B4C] pointer-events-none transition-opacity duration-75"
+                        className="board-cell-content hidden sm:[@media(hover:hover)]:flex opacity-0 group-hover:opacity-40 w-full h-full rounded-lg sm:rounded-xl overflow-hidden items-center justify-center p-0.5 sm:p-1 border border-dashed border-[#073B4C] pointer-events-none transition-opacity duration-75"
                         style={{
                           backgroundColor: currentTheme.primary,
                           transform: `rotateZ(${-rotationAngle}deg)`,
@@ -294,17 +330,17 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                         }}
                       >
                         {currentPlayer.photoUrl ? (
-                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden flex items-center justify-center bg-white">
+                          <div className="w-full h-full rounded-[6px] sm:rounded-lg overflow-hidden flex items-center justify-center bg-white pointer-events-none">
                             <img
                               src={currentPlayer.photoUrl}
                               alt="Preview"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover pointer-events-none"
                               referrerPolicy="no-referrer"
                             />
                           </div>
                         ) : (
                           <span
-                            className={`truncate max-w-full text-center text-[#073B4C] select-none ${getPlayerNameStyles(
+                            className={`truncate max-w-full text-center text-[#073B4C] select-none pointer-events-none ${getPlayerNameStyles(
                               formatCellName(currentPlayer.name, rows),
                               rows
                             )}`}

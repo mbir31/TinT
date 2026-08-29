@@ -16,7 +16,8 @@ import {
   ZoomOut,
   Crop as CropIcon,
   UploadCloud,
-  Move
+  Move,
+  RotateCcw
 } from 'lucide-react';
 
 interface ImageCropperModalProps {
@@ -27,6 +28,9 @@ interface ImageCropperModalProps {
   onNewImageSelected?: (newSrc: string) => void;
 }
 
+const VIEWPORT_SIZE = 240; // Exact preview box dimension in pixels
+const OUTPUT_SIZE = 360;   // High-res output square in pixels
+
 export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   imageSrc,
   onCropComplete,
@@ -35,24 +39,50 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   onNewImageSelected
 }) => {
   const t = TRANSLATIONS[language];
-  const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
+  const [baseDimensions, setBaseDimensions] = useState<{ w: number; h: number }>({
+    w: VIEWPORT_SIZE,
+    h: VIEWPORT_SIZE
+  });
+
   const [zoom, setZoom] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Load image object whenever imageSrc changes
+  // Multi-touch & pointer tracking
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pinchStartDistRef = useRef<number | null>(null);
+  const zoomAtPinchStartRef = useRef<number>(1);
+
+  // Load image object and compute natural aspect-ratio base fitting
   useEffect(() => {
     if (!imageSrc) return;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       setImageObj(img);
+      const naturalW = img.naturalWidth || img.width || VIEWPORT_SIZE;
+      const naturalH = img.naturalHeight || img.height || VIEWPORT_SIZE;
+      const aspect = naturalW / naturalH;
+
+      let w = VIEWPORT_SIZE;
+      let h = VIEWPORT_SIZE;
+
+      // Fit the image naturally inside the viewport so it covers the square cleanly
+      if (aspect >= 1) {
+        h = VIEWPORT_SIZE;
+        w = VIEWPORT_SIZE * aspect;
+      } else {
+        w = VIEWPORT_SIZE;
+        h = VIEWPORT_SIZE / aspect;
+      }
+
+      setBaseDimensions({ w, h });
       setZoom(1);
       setRotation(0);
       setPosition({ x: 0, y: 0 });
@@ -60,27 +90,75 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     img.src = imageSrc;
   }, [imageSrc]);
 
-  // Handle Drag / Pan Events
+  // Pointer Down (Mouse & Touch)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    });
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointersRef.current.size === 1) {
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX - position.x,
+        y: e.clientY - position.y
+      };
+    } else if (activePointersRef.current.size === 2) {
+      // Initialize pinch to zoom
+      const pts = Array.from(activePointersRef.current.values()) as Array<{ x: number; y: number }>;
+      if (pts.length >= 2) {
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        pinchStartDistRef.current = dist;
+        zoomAtPinchStartRef.current = zoom;
+      }
+    }
   };
 
+  // Pointer Move (Pan & Pinch)
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
+    if (!activePointersRef.current.has(e.pointerId)) return;
     e.preventDefault();
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointersRef.current.size === 1 && isDragging) {
+      setPosition({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y
+      });
+    } else if (activePointersRef.current.size === 2 && pinchStartDistRef.current) {
+      const pts = Array.from(activePointersRef.current.values()) as Array<{ x: number; y: number }>;
+      if (pts.length >= 2) {
+        const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const ratio = currentDist / pinchStartDistRef.current;
+        const newZoom = Math.min(3.5, Math.max(0.6, zoomAtPinchStartRef.current * ratio));
+        setZoom(newZoom);
+      }
+    }
   };
 
-  const handlePointerUp = () => {
-    setIsDragging(false);
+  // Pointer Up & Cancel
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    activePointersRef.current.delete(e.pointerId);
+
+    if (activePointersRef.current.size === 0) {
+      setIsDragging(false);
+      pinchStartDistRef.current = null;
+    } else if (activePointersRef.current.size === 1) {
+      const pts = Array.from(activePointersRef.current.values()) as Array<{ x: number; y: number }>;
+      const remainingPt = pts[0];
+      if (remainingPt) {
+        dragStartRef.current = {
+          x: remainingPt.x - position.x,
+          y: remainingPt.y - position.y
+        };
+      }
+      pinchStartDistRef.current = null;
+    }
   };
 
   // Wheel zoom
@@ -97,7 +175,16 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     setRotation((r) => (r + 90) % 360);
   };
 
-  // Perform Final Crop on High-Resolution Canvas
+  // Reset position & zoom
+  const handleReset = () => {
+    soundEngine.playTap();
+    hapticsEngine.trigger('tap');
+    setPosition({ x: 0, y: 0 });
+    setZoom(1);
+    setRotation(0);
+  };
+
+  // Perform Final Crop with mathematically congruent Canvas transform
   const handleConfirmCrop = useCallback(() => {
     if (!imageObj) return;
     setIsProcessing(true);
@@ -105,10 +192,10 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     hapticsEngine.trigger('medium');
 
     try {
-      const outputSize = 320; // High resolution square for tokens and badges
+      const scaleFactor = OUTPUT_SIZE / VIEWPORT_SIZE;
       const canvas = document.createElement('canvas');
-      canvas.width = outputSize;
-      canvas.height = outputSize;
+      canvas.width = OUTPUT_SIZE;
+      canvas.height = OUTPUT_SIZE;
       const ctx = canvas.getContext('2d');
 
       if (!ctx) {
@@ -116,51 +203,36 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
         return;
       }
 
-      // Fill with smooth background
+      // Smooth white background
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, outputSize, outputSize);
+      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
       ctx.save();
-      // Move to center of canvas
-      ctx.translate(outputSize / 2, outputSize / 2);
+
+      // 1. Move to canvas center + scaled screen position (exact match to CSS transform)
+      ctx.translate(
+        OUTPUT_SIZE / 2 + position.x * scaleFactor,
+        OUTPUT_SIZE / 2 + position.y * scaleFactor
+      );
+
+      // 2. Rotate around translated center
       ctx.rotate((rotation * Math.PI) / 180);
 
-      // Sizing ratio relative to crop window
-      // Crop container display box is 240px wide
-      const displaySize = 240;
-      const scaleFactor = outputSize / displaySize;
+      // 3. Scale by zoom factor
+      ctx.scale(zoom * scaleFactor, zoom * scaleFactor);
 
-      const scaledZoom = zoom * scaleFactor;
-      const scaledX = position.x * scaleFactor;
-      const scaledY = position.y * scaleFactor;
-
-      // Draw image centered with offsets
-      const imgAspect = imageObj.width / imageObj.height;
-      let drawW: number;
-      let drawH: number;
-
-      if (imgAspect >= 1) {
-        drawH = outputSize * scaledZoom;
-        drawW = drawH * imgAspect;
-      } else {
-        drawW = outputSize * scaledZoom;
-        drawH = drawW / imgAspect;
-      }
-
-      // If rotated 90 or 270, adjust coordinates
-      if (rotation === 90) {
-        ctx.drawImage(imageObj, -drawW / 2 + scaledY, -drawH / 2 - scaledX, drawW, drawH);
-      } else if (rotation === 180) {
-        ctx.drawImage(imageObj, -drawW / 2 - scaledX, -drawH / 2 - scaledY, drawW, drawH);
-      } else if (rotation === 270) {
-        ctx.drawImage(imageObj, -drawW / 2 - scaledY, -drawH / 2 + scaledX, drawW, drawH);
-      } else {
-        ctx.drawImage(imageObj, -drawW / 2 + scaledX, -drawH / 2 + scaledY, drawW, drawH);
-      }
+      // 4. Draw image with exact base dimensions centered at (0, 0)
+      ctx.drawImage(
+        imageObj,
+        -baseDimensions.w / 2,
+        -baseDimensions.h / 2,
+        baseDimensions.w,
+        baseDimensions.h
+      );
 
       ctx.restore();
 
-      // Export as optimized WebP or JPEG
+      // Export as high quality JPEG
       const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
       onCropComplete(croppedDataUrl);
     } catch (err) {
@@ -168,7 +240,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     } finally {
       setIsProcessing(false);
     }
-  }, [imageObj, rotation, zoom, position, onCropComplete]);
+  }, [imageObj, baseDimensions, rotation, zoom, position, onCropComplete]);
 
   // File replacement handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,6 +255,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Drag & drop new file support
@@ -202,16 +275,13 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-[#073B4C]/70 backdrop-blur-md select-none animate-in fade-in duration-200"
-      onPointerUp={handlePointerUp}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-[#073B4C]/70 backdrop-blur-md select-none animate-in fade-in duration-200">
       <div
         className="relative w-full max-w-md bg-white rounded-2xl sm:rounded-[32px] border-3 sm:border-4 border-[#073B4C] shadow-[6px_6px_0px_0px_#073B4C] sm:shadow-[10px_10px_0px_0px_#073B4C] flex flex-col max-h-[94vh] overflow-hidden"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
       >
-        {/* Modal Top Header */}
+        {/* Modal Header */}
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b-2 sm:border-b-3 border-[#073B4C] bg-[#FFF9F0] flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#EF476F] border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex items-center justify-center text-white flex-shrink-0">
@@ -241,37 +311,45 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
 
         {/* Cropping Canvas Viewport */}
         <div className="p-3 sm:p-4 flex flex-col items-center gap-3 bg-[#FFFDF9] overflow-y-auto">
-          {/* Visual Crop Box Container */}
+          {/* Visual Crop Box Container (Exactly 240px by 240px) */}
           <div
-            ref={containerRef}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onWheel={handleWheel}
-            className="relative w-[220px] h-[220px] sm:w-[240px] sm:h-[240px] rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] bg-slate-900 overflow-hidden shadow-[4px_4px_0px_0px_#073B4C] cursor-grab active:cursor-grabbing touch-none flex items-center justify-center"
+            style={{ width: `${VIEWPORT_SIZE}px`, height: `${VIEWPORT_SIZE}px` }}
+            className="relative rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] bg-slate-900 overflow-hidden shadow-[4px_4px_0px_0px_#073B4C] cursor-grab active:cursor-grabbing touch-none flex items-center justify-center select-none"
           >
-            {/* Movable and Scalable Image Layer */}
+            {/* Movable & Scalable Image Layer */}
             {imageObj && (
               <div
                 style={{
+                  width: `${baseDimensions.w}px`,
+                  height: `${baseDimensions.h}px`,
                   transform: `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg) scale(${zoom})`,
                   transformOrigin: 'center center',
                   transition: isDragging ? 'none' : 'transform 0.05s ease-out'
                 }}
-                className="pointer-events-none select-none flex items-center justify-center"
+                className="flex-shrink-0 flex items-center justify-center pointer-events-none select-none relative"
               >
                 <img
                   src={imageSrc}
                   alt="Crop preview"
                   draggable={false}
-                  className="max-w-none w-56 h-56 object-contain pointer-events-none"
+                  style={{
+                    width: `${baseDimensions.w}px`,
+                    height: `${baseDimensions.h}px`
+                  }}
+                  className="max-w-none max-h-none block object-contain pointer-events-none select-none"
                 />
               </div>
             )}
 
-            {/* Grid & Token Mask Overlay */}
+            {/* Precision Grid & Token Mask Overlay */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              {/* Rounded Square Mask Guide */}
-              <div className="w-[190px] h-[190px] sm:w-[210px] sm:h-[210px] rounded-2xl sm:rounded-[24px] border-2 border-white/80 shadow-[0_0_0_9999px_rgba(7,59,76,0.55)] flex flex-col justify-between p-2">
+              {/* Center crosshair & grid overlay */}
+              <div className="w-[200px] h-[200px] rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(7,59,76,0.55)] flex flex-col justify-between p-2">
                 <div className="w-full flex justify-between">
                   <span className="w-3 h-3 border-t-2 border-l-2 border-white" />
                   <span className="w-3 h-3 border-t-2 border-r-2 border-white" />
@@ -318,7 +396,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
               >
                 <ZoomIn className="w-4 h-4" />
               </button>
-              <span className="text-[11px] font-black text-[#073B4C] min-w-8 text-right">
+              <span className="text-[11px] font-black text-[#073B4C] min-w-8 text-right font-mono">
                 {Math.round(zoom * 100)}%
               </span>
             </div>
@@ -333,6 +411,16 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
               >
                 <RotateCw className="w-3.5 h-3.5" />
                 <span>{t.rotatePhoto}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-reset-crop"
+                onClick={handleReset}
+                className="px-3 py-2 rounded-xl bg-white border-2 border-[#073B4C] text-[#073B4C] text-xs font-black shadow-[2px_2px_0px_0px_#073B4C] hover:bg-amber-50 active:translate-x-0.5 active:translate-y-0.5 transition-all"
+                title="Reset Position"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#EF476F]" />
               </button>
 
               <button
@@ -355,7 +443,7 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Sticky Footer Action */}
+        {/* Modal Footer Actions */}
         <div className="p-3 sm:p-4 border-t-2 sm:border-t-3 border-[#073B4C] bg-[#FFF9F0] flex gap-2 flex-shrink-0">
           <button
             type="button"
