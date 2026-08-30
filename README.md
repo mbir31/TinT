@@ -8,40 +8,41 @@
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-010101?logo=socket.io&logoColor=white)](https://socket.io/)
 [![PWA Ready](https://img.shields.io/badge/PWA-Offline_Ready-5A0FC8?logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
-**TinT** is an interactive, tactile, 3-in-1 strategy board game suite crafted with modern web technologies, 3D physics tilt effects, procedural audio synthesis, and real-time multiplayer. Designed with a **Bengali-First** aesthetic and complete bilingual localization (English ⇄ বাংলা), it brings together three classic strategy games in an installable Progressive Web App (PWA).
+**TinT** is a production-grade, tactile, 3-in-1 strategy board game suite crafted with modern web technologies, 3D physics tilt interactions, procedural Web Audio synthesis, authoritative real-time multiplayer, and offline IndexedDB persistence. Designed with a **Bengali-First** aesthetic and complete bilingual localization (English ⇄ বাংলা), it brings together three classic strategy games in an installable, high-performance Progressive Web App (PWA).
 
 ---
 
 ## 🕹️ Included Games
 
 ### 1. 3D Tic-Tac-Toe & Gomoku (টিক-ট্যাক-টো)
-- **Classic 3×3 Grid**: Fast 3-in-a-row showdown with instant tactile feedback.
-- **Medium 4×4 & 5×5 Boards**: 4-in-a-row tactical depth with larger decision trees.
-- **Grand 10×10 & 15×15 Gomoku Arenas**: 5-in-a-row continuous line battle with candidate move pruning.
+- **Classic 3×3 Grid**: Quick 3-in-a-row showdown with instant tactile feedback.
+- **Medium 4×4 & 5×5 Boards**: 4-in-a-row tactical depth with larger strategic branching.
+- **Grand 10×10 & 15×15 Gomoku Arenas**: 5-in-a-row continuous line battle with spatial candidate move pruning.
 - **Customizable Dimensions**: Configure custom grid sizes from 3×3 to 15×15 and variable win lengths.
 
 ### 2. Dots & Boxes (খোপ খেলা / বিন্দু ও বক্স)
 - **Classic Paper & Pen Strategy**: Connect adjacent dots with horizontal and vertical lines to capture square boxes.
 - **Consecutive Turn Mechanism**: Completing a box grants an immediate bonus turn.
-- **Configurable Grid Scales**: Play on 2×2 (3×3 dots), 3×3 (4×4 dots), 4×4 (5×5 dots), and 5×5 (6×6 dots).
+- **Configurable Grid Scales**: Play on 2×2 (3×3 dots), 3×3 (4×4 dots), 4×4 (5×5 dots), 5×5 (6×6 dots), and custom sizes up to 6×6 boxes (7×7 dots).
 - **Tactical AI**: Evaluates safe non-capturing lines, avoids creating 3-sided trap boxes, and executes chain captures.
 
 ### 3. Connect Four (৪-মিলান / Four in a Row)
-- **Gravity-Fed Vertical Rack**: Drop colored tokens into vertical columns with natural physics and bevel highlights.
+- **Gravity-Fed Vertical Rack**: Drop colored tokens into vertical columns with natural drop physics and bevel highlights.
 - **Multi-Directional Win Detection**: Connect 4 pieces horizontally, vertically, or diagonally.
-- **Rack Configurations**: Standard (7×6), Compact (6×5), and Grand Master (8×7) boards.
-- **Interactive Column Previews**: Hover arrows and ghost tokens guide every drop before commitment.
+- **Rack Configurations**: Standard (7×6), Compact (6×5), Master (8×7), and custom boards (4–8 rows, 5–9 columns).
+- **Interactive Column Previews**: Hover drop indicators and ghost tokens guide every drop before commitment.
 
 ---
 
 ## ✨ Key Features
 
-- **🌐 Real-Time Online Multiplayer**:
-  - Room creation with 5-character alphanumeric room codes.
-  - One-click invite link sharing (Web Share API & clipboard sync).
-  - Low-latency bidirectional WebSocket synchronization powered by Socket.IO.
+- **🌐 Real-Time Authoritative Online Multiplayer**:
+  - Authoritative backend state validation preventing illegal moves and race conditions.
+  - Quick room creation with 5-character alphanumeric room codes (e.g., `8K2PM`).
+  - Context-aware Web Share API and one-tap clipboard invitation link sharing.
+  - Automatic reconnection with 75-second grace timers and timing-safe 24-byte bearer authentication tokens.
   - Floating live reaction emojis with sound and visual feedback.
-  - Automatic disconnection alerts and seamless rematch negotiation.
+  - Integrated rematch voting and room lifecycle management.
 
 - **🤖 Smart Heuristic AI Engine**:
   - **Easy Tier**: Casual play with randomized exploratory moves.
@@ -49,31 +50,34 @@
   - **Hard Tier**: Minimax with Alpha-Beta pruning, spatial candidate filtering, and deep chain evaluations.
 
 - **🇧🇩 Bilingual Localization (বাংলা ও English)**:
-  - Complete Bengali typography support paired with *Noto Serif Bengali* and *Outfit*.
+  - Complete Bengali typography support paired with *Hind Siliguri* / *Noto Serif Bengali* and *Outfit*.
   - Native Bengali numeral conversions (`১, ২, ৩, ...`).
   - One-tap instant language toggle across all views.
 
 - **🎵 Procedural Web Audio Engine**:
   - 100% synthesized sound effects generated in real time using the browser's Web Audio API.
   - Zero external `.mp3` / `.wav` assets required — zero loading latency and full offline compatibility.
-  - Unique tone frequencies for moves, box completions, token drops, victories, and confetti bursts.
+  - Dynamic procedural tones for moves, line placements, box completions, token drops, victories, and confetti bursts.
 
-- **🎨 Custom Avatars & Theme Engine**:
-  - 8 distinct player themes (Coral, Sapphire, Emerald, Gold, Rose, Indigo, Lavender, Slate).
-  - Built-in photo cropper to upload and frame custom player profile pictures.
-  - 10 custom avatar symbols (Crown, Tiger, Trophy, Flame, Star, Sword, Shield, Zap, Robot, Diamond).
+- **🎨 Player Customization & Interactive Cropper**:
+  - 10 curated color themes (Coral, Blue, Purple, Emerald, Amber, Rose, Orange, Teal, Indigo, Cyan, Lime).
+  - Built-in photo cropper with canvas manipulation, zoom, rotation, and pan controls.
+  - Strict client- and server-side image MIME type verification (`image/jpeg`, `png`, `webp`, `gif`) and 150KB optimized payload storage.
+  - 16 custom avatar symbols (Crown, Tiger, Trophy, Flame, Star, Sword, Shield, Zap, Robot, Diamond, Circle, Sparkles, Rocket, Heart, Gem, Controller).
 
-- **🎬 Winning Move Replay**:
-  - Replay the decisive winning move on demand with animated highlighting and celebratory effects.
+- **🎬 Winning Move Replay & Celebrations**:
+  - Step-by-step decisive move replay with animated highlighting.
+  - Canvas-based confetti bursts, particle explosions, and winner banners.
 
 - **🏆 Achievement & Stats System**:
+  - Dual-layer storage (IndexedDB with automatic localStorage fallback).
   - Track total wins, current win streaks, high scores, and game-specific victories.
   - Unlockable badges (First Blood, Streak Master, Grandmaster, Chain King, Four Connect, etc.).
-  - Persistent state saved safely to `localStorage`.
 
-- **📱 Progressive Web App (PWA)**:
+- **📱 Progressive Web App (PWA) & Security**:
   - Installable on Android, iOS, Windows, and macOS.
-  - Service worker caching for fast offline play anywhere.
+  - Service worker caching with automatic update prompts.
+  - Hardened with Content Security Policy (CSP), `X-Content-Type-Options: nosniff`, and socket-level rate limiting.
 
 ---
 
@@ -82,31 +86,38 @@
 ```
 tint-board-game/
 ├── public/                  # PWA Manifest, Service Worker & Vector Icons
-├── server.ts                # Express HTTP + Socket.IO Real-time WebSocket Server
+├── server.ts                # Express HTTP + Socket.IO Authoritative Game Server
 ├── src/
 │   ├── components/          # Modular React Components
-│   │   ├── ConnectFourBoard.tsx      # Vertical gravity rack renderer
-│   │   ├── DotsGameBoard.tsx         # SVG precision coordinate grid
-│   │   ├── GameBoard.tsx             # 3D Neo-brutalist Tic-Tac-Toe board
-│   │   ├── OnlineLobby.tsx           # Room codes & multiplayer lobby
-│   │   ├── OnlineReactions.tsx       # Real-time floating emoji bar
-│   │   ├── GameResultModal.tsx       # Win/Draw overlay with replay controls
-│   │   ├── PlayerCustomizer.tsx      # Avatar & theme configuration
-│   │   ├── SettingsModal.tsx         # Audio, haptics & visual preferences
+│   │   ├── ConnectFourBoard.tsx          # Vertical gravity rack renderer
+│   │   ├── ConnectFourBoardSelection.tsx # C4 grid presets and customizer
+│   │   ├── DotsGameBoard.tsx             # SVG coordinate grid with interactive lines
+│   │   ├── DotsBoardSelection.tsx        # Dots & Boxes presets
+│   │   ├── GameBoard.tsx                 # 3D Neo-brutalist Tic-Tac-Toe board
+│   │   ├── BoardSelection.tsx            # Tic-Tac-Toe / Gomoku board presets
+│   │   ├── OnlineLobby.tsx               # Multiplayer room manager & invite link generator
+│   │   ├── OnlineReactions.tsx           # Floating real-time emoji reaction system
+│   │   ├── GameResultModal.tsx           # Game conclusion dialog with replay controls
+│   │   ├── LocalSetupModal.tsx           # Local 2-Player name and avatar configuration
+│   │   ├── PlayerCustomizer.tsx          # Player profile, avatar, and color customizer
+│   │   ├── ImageCropperModal.tsx         # Interactive pan/zoom/rotate image cropper
+│   │   ├── SettingsModal.tsx             # Sound, haptics, tilt, and language settings
 │   │   └── ...
-│   ├── engine/              # Pure Core Logic & Mathematics
-│   │   ├── aiEngine.ts               # Minimax & Alpha-Beta pruning
-│   │   ├── dotsAiEngine.ts           # Chain & box evaluation heuristics
-│   │   ├── connectFourEngine.ts      # Gravity drop & diagonal line detector
-│   │   ├── dotsEngine.ts             # Topological grid state & box completion
-│   │   ├── soundEngine.ts            # Web Audio API procedural synthesizer
-│   │   ├── hapticsEngine.ts          # Vibration feedback controller
-│   │   ├── multiplayerEngine.ts      # Socket.IO client interface
-│   │   └── storage.ts                # Local persistence & settings store
+│   ├── engine/              # Pure Core Logic & Authoritative Mathematical Models
+│   │   ├── aiEngine.ts                   # Minimax, Alpha-Beta pruning & heuristics
+│   │   ├── dotsAiEngine.ts               # Chain and box valuation heuristics
+│   │   ├── connectFourEngine.ts          # Gravity drop & multi-directional line detector
+│   │   ├── dotsEngine.ts                 # Topological grid state & box completion engine
+│   │   ├── gameEngine.ts                 # Tic-Tac-Toe / Gomoku win verification
+│   │   ├── soundEngine.ts                # Web Audio API procedural synthesizer
+│   │   ├── hapticsEngine.ts              # Mobile vibration feedback controller
+│   │   ├── multiplayerEngine.ts          # Socket.IO client interface & state sync
+│   │   ├── indexedDb.ts                  # Persistent structured database storage
+│   │   └── storage.ts                    # Local persistence & settings store
 │   ├── i18n/                # Localization Dictionaries (English & Bengali)
-│   ├── constants/           # Color Schemes, Avatars, and Board Presets
+│   ├── constants/           # Color Schemes, Avatars, Themes, and Board Presets
 │   ├── types.ts             # Strict TypeScript Type Definitions
-│   ├── App.tsx              # Root Application Coordinator
+│   ├── App.tsx              # Root Application Coordinator & Navigation Hub
 │   └── main.tsx             # DOM Root Entry Point
 ├── package.json
 ├── tsconfig.json
@@ -175,13 +186,14 @@ tint-board-game/
 
 | Feature | Options |
 |---|---|
-| **Audio Volume** | 0% to 100% with independent procedural synth toggles |
-| **Haptic Feedback** | Subtle vibration feedback on mobile devices |
+| **Game Modes** | Local 2-Player (Same Device), AI Opponent (3 Difficulties), Online 2-Player (Real-Time) |
+| **Audio Volume** | 0% to 100% with independent procedural synthesizer toggles |
+| **Haptic Feedback** | Subtle vibration feedback patterns on supported mobile devices |
 | **3D Tilt Effects** | Interactive perspective distortion following cursor and touch movement |
-| **Reduced Motion** | Accessibility toggle to disable intense animations |
-| **Token Color Palettes** | Select from curated color combinations (Classic Neo, Emerald & Gold, Sunset Blaze, Cyber Neon, Ruby & Sapphire, Ocean & Sunrise) with dynamic real-time player updates |
-| **Dots Grid Themes** | Custom peg and line colors for enhanced contrast |
-| **Languages** | Bengali (`বাংলা`) / English (`EN`) |
+| **Reduced Motion** | Accessibility toggle to disable intense animations and particle effects |
+| **Player Customization** | 10 Color palettes, 16 custom avatar icons, and photo upload with interactive cropper |
+| **Board Presets** | Multiple board scales and custom dimension builders across all three games |
+| **Languages** | Bengali (`বাংলা`) / English (`EN`) with full numeral localization |
 
 ---
 
