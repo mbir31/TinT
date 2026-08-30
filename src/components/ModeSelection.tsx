@@ -9,8 +9,9 @@ import { TRANSLATIONS } from '../i18n/translations';
 import { PLAYER_THEMES } from '../constants/themes';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
+import { useOnlineStatus } from '../engine/networkStatus';
 import { GameSelector } from './GameSelector';
-import { Users, Bot, Globe, Sparkles, Zap, Flame, ShieldAlert, Edit3 } from 'lucide-react';
+import { Users, Bot, Globe, Sparkles, Zap, Flame, ShieldAlert, Edit3, WifiOff } from 'lucide-react';
 
 interface ModeSelectionProps {
   language: Language;
@@ -25,6 +26,7 @@ interface ModeSelectionProps {
   player1: Player;
   player2: Player;
   onOpenLocalSetup?: () => void;
+  onBackToHub?: () => void;
 }
 
 export const ModeSelection: React.FC<ModeSelectionProps> = ({
@@ -39,23 +41,46 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
   boardLabel,
   player1,
   player2,
-  onOpenLocalSetup
+  onOpenLocalSetup,
+  onBackToHub
 }) => {
   const t = TRANSLATIONS[language];
   const p1Theme = PLAYER_THEMES[player1.colorKey] || PLAYER_THEMES.blue;
   const p2Theme = PLAYER_THEMES[player2.colorKey] || PLAYER_THEMES.coral;
 
+  const isOnlineState = useOnlineStatus();
   const isDots = activeGame === 'dotsboxes';
   const isC4 = activeGame === 'connectfour';
 
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col gap-3 sm:gap-4 px-3 sm:px-4 py-2 sm:py-3 select-none">
-      {/* Multi-Game Switcher Tab */}
-      <GameSelector
-        activeGame={activeGame}
-        onSelectGame={onSelectGame}
-        language={language}
-      />
+    <div className="w-full max-w-xl mx-auto flex flex-col gap-3 sm:gap-4 px-3 sm:px-4 py-2 sm:py-3 select-none animate-in fade-in duration-200">
+      {/* Top Navigation & Game Switcher */}
+      <div className="flex items-center justify-between gap-2">
+        {onBackToHub && (
+          <button
+            id="btn-back-to-welcome-hub"
+            type="button"
+            onClick={() => {
+              soundEngine.playTap();
+              hapticsEngine.trigger('tap');
+              onBackToHub();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border-2 border-[#073B4C] text-xs font-black text-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] hover:bg-amber-50 active:translate-x-0.5 active:translate-y-0.5 transition-all flex-shrink-0"
+          >
+            <span>←</span>
+            <span>{language === 'bn' ? 'সকল গেম' : 'All Games'}</span>
+          </button>
+        )}
+
+        {/* Multi-Game Switcher Tab */}
+        <div className="flex-1 min-w-0">
+          <GameSelector
+            activeGame={activeGame}
+            onSelectGame={onSelectGame}
+            language={language}
+          />
+        </div>
+      </div>
 
       {/* Hero Welcome Card */}
       <div className="relative bg-white rounded-2xl sm:rounded-[28px] border-3 sm:border-4 border-[#073B4C] p-4 sm:p-5 text-center shadow-[5px_5px_0px_0px_#073B4C] sm:shadow-[8px_8px_0px_0px_#073B4C] overflow-hidden">
@@ -294,7 +319,11 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
           hapticsEngine.trigger('medium');
           onSelectMode('online');
         }}
-        className="group relative flex items-center justify-between p-3.5 sm:p-5 rounded-2xl sm:rounded-[24px] bg-[#06D6A0] border-3 sm:border-4 border-[#073B4C] text-[#073B4C] shadow-[4px_4px_0px_0px_#073B4C] sm:shadow-[6px_6px_0px_0px_#073B4C] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#073B4C] active:translate-y-0.5 transition-all text-left"
+        className={`group relative flex items-center justify-between p-3.5 sm:p-5 rounded-2xl sm:rounded-[24px] border-3 sm:border-4 border-[#073B4C] text-[#073B4C] shadow-[4px_4px_0px_0px_#073B4C] sm:shadow-[6px_6px_0px_0px_#073B4C] transition-all text-left ${
+          isOnlineState
+            ? 'bg-[#06D6A0] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#073B4C] active:translate-y-0.5'
+            : 'bg-emerald-100/90 border-[#073B4C]'
+        }`}
       >
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white border-2 sm:border-3 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] flex items-center justify-center text-[#06D6A0] group-hover:rotate-6 transition-transform flex-shrink-0">
@@ -305,12 +334,21 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               <h3 className="text-base sm:text-xl font-black tracking-tight leading-none text-[#073B4C] truncate">
                 {t.onlineMode}
               </h3>
-              <span className="px-1.5 py-0.5 rounded-full bg-[#FFD166] text-[#073B4C] border border-[#073B4C] text-[9px] sm:text-[10px] font-black uppercase flex-shrink-0">
-                {t.liveP2P}
-              </span>
+              {isOnlineState ? (
+                <span className="px-1.5 py-0.5 rounded-full bg-[#FFD166] text-[#073B4C] border border-[#073B4C] text-[9px] sm:text-[10px] font-black uppercase flex-shrink-0">
+                  {t.liveP2P}
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-full bg-[#EF476F] text-white border border-[#073B4C] text-[9px] sm:text-[10px] font-black flex items-center gap-1 flex-shrink-0">
+                  <WifiOff className="w-2.5 h-2.5" />
+                  <span>{language === 'bn' ? 'অফলাইন' : 'Offline'}</span>
+                </span>
+              )}
             </div>
             <p className="text-xs sm:text-sm font-bold text-emerald-950/80 mt-0.5 sm:mt-1 truncate">
-              {t.onlineModeDesc}
+              {isOnlineState
+                ? t.onlineModeDesc
+                : (language === 'bn' ? 'ইন্টারনেট সংযোগ প্রয়োজন (লোকাল খেলা অফলাইনে চালু)' : 'Internet required (Local modes work offline)')}
             </p>
           </div>
         </div>

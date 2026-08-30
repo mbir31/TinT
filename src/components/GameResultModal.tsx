@@ -58,8 +58,8 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
   const winnerTheme = winner ? PLAYER_THEMES[winner.colorKey] || PLAYER_THEMES.blue : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#073B4C]/70 backdrop-blur-sm select-none animate-in fade-in duration-200">
-      <div className="relative w-full max-w-sm bg-white rounded-[32px] border-4 border-[#073B4C] shadow-[12px_12px_0px_0px_#073B4C] p-6 text-center flex flex-col items-center gap-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#073B4C]/70 backdrop-blur-sm select-none animate-in fade-in duration-200">
+      <div className="relative w-full max-w-sm bg-white rounded-3xl sm:rounded-[32px] border-3 sm:border-4 border-[#073B4C] shadow-[8px_8px_0px_0px_#073B4C] sm:shadow-[12px_12px_0px_0px_#073B4C] p-4 sm:p-6 text-center flex flex-col items-center gap-3 sm:gap-4 max-h-[92vh] overflow-y-auto overscroll-contain custom-board-scroll">
         {/* Decorative corner circles */}
         <div className="absolute -top-6 -right-6 w-20 h-20 bg-[#FFD166] rounded-full border-3 border-[#073B4C] -z-0 opacity-40" />
         <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-[#06D6A0] rounded-full border-3 border-[#073B4C] -z-0 opacity-40" />

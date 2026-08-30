@@ -106,6 +106,8 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
 
   const isLargeBoard = rows > 6 || cols > 6;
 
+  const [shakingCell, setShakingCell] = useState<{ row: number; col: number } | null>(null);
+
   // Rotate perspective by 90 degrees clockwise
   const handleRotate90 = () => {
     soundEngine.playTap();
@@ -121,9 +123,17 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
     setZoomLevel(1);
   };
 
-  // Instant move trigger with debounce protection
+  // Instant move trigger with debounce protection and invalid feedback
   const triggerMove = useCallback((r: number, c: number) => {
-    if (disabled || board[r]?.[c] !== null) return;
+    if (disabled || board[r]?.[c] !== null) {
+      if (board[r]?.[c] !== null && !disabled) {
+        soundEngine.playError();
+        hapticsEngine.trigger('invalid');
+        setShakingCell({ row: r, col: c });
+        setTimeout(() => setShakingCell(null), 300);
+      }
+      return;
+    }
     const now = Date.now();
     if (now - lastTriggerTimeRef.current < 160) return; // Prevent duplicate rapid firings
     lastTriggerTimeRef.current = now;
@@ -155,22 +165,22 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
 
   // Determine responsive cell sizing based on board dimensions
   const getCellSizeClass = () => {
-    if (rows <= 3) return 'w-[72px] h-[72px] xs:w-[84px] xs:h-[84px] sm:w-26 sm:h-26';
-    if (rows <= 4) return 'w-[54px] h-[54px] xs:w-[62px] xs:h-[62px] sm:w-20 sm:h-20';
-    if (rows <= 5) return 'w-[44px] h-[44px] xs:w-[50px] xs:h-[50px] sm:w-16 sm:h-16';
-    if (rows <= 6) return 'w-[36px] h-[36px] xs:w-[42px] xs:h-[42px] sm:w-13 sm:h-13';
-    if (rows <= 8) return 'w-[30px] h-[30px] xs:w-[34px] xs:h-[34px] sm:w-11 sm:h-11';
-    if (rows <= 10) return 'w-[26px] h-[26px] xs:w-[28px] xs:h-[28px] sm:w-9 sm:h-9';
-    return 'w-[22px] h-[22px] sm:w-8 sm:h-8';
+    if (rows <= 3) return 'w-[min(23vw,80px)] h-[min(23vw,80px)] sm:w-24 sm:h-24';
+    if (rows <= 4) return 'w-[min(17.5vw,62px)] h-[min(17.5vw,62px)] sm:w-20 sm:h-20';
+    if (rows <= 5) return 'w-[min(14vw,50px)] h-[min(14vw,50px)] sm:w-16 sm:h-16';
+    if (rows <= 6) return 'w-[min(11.5vw,42px)] h-[min(11.5vw,42px)] sm:w-14 sm:h-14';
+    if (rows <= 8) return 'w-[min(9.5vw,34px)] h-[min(9.5vw,34px)] min-w-[28px] min-h-[28px] sm:w-11 sm:h-11';
+    if (rows <= 10) return 'w-[min(8vw,30px)] h-[min(8vw,30px)] min-w-[26px] min-h-[26px] sm:w-9 sm:h-9';
+    return 'w-[28px] h-[28px] min-w-[28px] min-h-[28px] sm:w-8 sm:h-8';
   };
 
   const currentTheme = PLAYER_THEMES[currentPlayer.colorKey] || PLAYER_THEMES.blue;
   const currentAngleNormalized = ((rotationAngle % 360) + 360) % 360;
 
   return (
-    <div className="relative w-full max-w-full flex flex-col items-center justify-center p-1 sm:p-3 select-none overflow-x-hidden">
+    <div className="relative w-full max-w-full flex flex-col items-center justify-center p-1 sm:p-2 select-none overflow-x-hidden">
       {/* 3D Perspective & Zoom Control Bar */}
-      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 px-3 py-1.5 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[2.5px_2.5px_0px_0px_#073B4C] z-10 animate-in fade-in">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 px-3 py-1.5 rounded-2xl bg-white border-2 border-[#073B4C] shadow-[2.5px_2.5px_0px_0px_#073B4C] z-10 animate-in fade-in flex-wrap justify-center">
         {/* 90-Degree Rotation Button */}
         <button
           id="btn-rotate-board-90"
@@ -191,7 +201,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
         {isLargeBoard && (
           <div className="flex items-center gap-1 border-l border-[#073B4C]/20 pl-1.5">
             <button
-              onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.15))}
+              onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.15).toFixed(2)))}
               className="p-1 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
               title={t.zoomOut || 'Zoom Out'}
               aria-label="Zoom Out"
@@ -202,7 +212,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
               {Math.round(zoomLevel * 100)}%
             </span>
             <button
-              onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.15))}
+              onClick={() => setZoomLevel((z) => Math.min(1.4, +(z + 0.15).toFixed(2)))}
               className="p-1 rounded-lg text-[#073B4C] hover:bg-amber-100 transition-colors"
               title={t.zoomIn || 'Zoom In'}
               aria-label="Zoom In"
@@ -227,7 +237,9 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
 
       {/* 3D Board Stage with safe scroll handling */}
       <div
-        className="board-3d-stage max-w-full overflow-x-auto overflow-y-hidden p-2 sm:p-4 flex items-center justify-center"
+        className={`board-3d-stage w-full max-w-full ${
+          isLargeBoard ? 'overflow-auto custom-board-scroll max-h-[62vh]' : 'overflow-visible'
+        } p-2 sm:p-4 flex items-center justify-center`}
         style={{ touchAction: isLargeBoard ? 'pan-x pan-y' : 'manipulation' }}
       >
         <div
@@ -249,6 +261,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                 const isWinning = isWinningCell(r, c);
                 const isLast = lastMove?.row === r && lastMove?.col === c;
                 const isWinningMove = isWinning && effectiveWinningMove?.row === r && effectiveWinningMove?.col === c;
+                const isShaking = shakingCell?.row === r && shakingCell?.col === c;
 
                 let cellOwner: Player | null = null;
                 if (cell === player1.id || cell === 'X' || cell === 'player1') {
@@ -268,7 +281,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                     key={`cell-${r}-${c}`}
                     id={`cell-${r}-${c}`}
                     type="button"
-                    disabled={disabled || cell !== null}
+                    disabled={disabled}
                     onPointerDown={handlePointerDown}
                     onPointerUp={(e) => handlePointerUp(r, c, e)}
                     onClick={() => triggerMove(r, c)}
@@ -281,6 +294,7 @@ export const GameBoard: React.FC<GameBoardProps> = memo(({
                           ? 'bg-[#FFF9F0] border-[#073B4C] active:scale-95 active:bg-amber-100 shadow-[1.5px_1.5px_0px_0px_#073B4C] sm:shadow-[2px_2px_0px_0px_#073B4C] cursor-pointer'
                           : 'bg-white border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] sm:shadow-[3px_3px_0px_0px_#073B4C] cursor-default'
                       }
+                      ${isShaking ? 'cell-shake-invalid !border-[#EF476F] ring-2 ring-[#EF476F]' : ''}
                       ${isWinning ? 'cell-winning-glow !border-[#06D6A0] !bg-emerald-50 scale-105 z-10' : ''}
                       ${isWinningMove ? 'ring-4 ring-[#FFD166] shadow-[0_0_24px_rgba(255,209,102,0.9)] z-20 ' + (isReplayingWinningMove ? 'winning-move-replaying' : '') : ''}
                       ${isLast && !isWinning ? 'ring-2 sm:ring-3 ring-[#FFD166]' : ''}

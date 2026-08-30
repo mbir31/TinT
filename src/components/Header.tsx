@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   const t = TRANSLATIONS[language];
 
   return (
-    <header className="w-full max-w-4xl mx-auto px-2.5 sm:px-4 py-2 sm:py-3 flex items-center justify-between z-30 select-none gap-2">
+    <header className="w-full max-w-4xl mx-auto px-2.5 sm:px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-1.5 sm:pb-3 pl-[max(0.625rem,env(safe-area-inset-left))] pr-[max(0.625rem,env(safe-area-inset-right))] flex items-center justify-between z-30 select-none gap-2 flex-shrink-0">
       {/* Brand Logo & Home Button */}
       <button
         id="btn-header-home"

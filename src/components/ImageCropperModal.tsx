@@ -242,10 +242,16 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     }
   }, [imageObj, baseDimensions, rotation, zoom, position, onCropComplete]);
 
-  // File replacement handler
+  // File replacement handler with safe MIME & size checks
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validMimeTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -258,11 +264,12 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     e.target.value = '';
   };
 
-  // Drag & drop new file support
+  // Drag & drop new file support with safe MIME & size checks
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (file && validMimeTypes.includes(file.type) && file.size <= 5 * 1024 * 1024) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;

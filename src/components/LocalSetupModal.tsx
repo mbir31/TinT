@@ -56,8 +56,8 @@ export const LocalSetupModal: React.FC<LocalSetupModalProps> = ({
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
 
-    const cleanName1 = name1.trim() || (language === 'bn' ? 'খেলোয়াড় ১' : 'Player 1');
-    const cleanName2 = name2.trim() || (language === 'bn' ? 'খেলোয়াড় ২' : 'Player 2');
+    const cleanName1 = name1.trim().slice(0, 15) || (language === 'bn' ? 'খেলোয়াড় ১' : 'Player 1');
+    const cleanName2 = name2.trim().slice(0, 15) || (language === 'bn' ? 'খেলোয়াড় ২' : 'Player 2');
 
     onStartGame(cleanName1, color1, cleanName2, color2, photo1, photo2);
   };
@@ -65,6 +65,13 @@ export const LocalSetupModal: React.FC<LocalSetupModalProps> = ({
   const handleFileChange = (target: 'p1' | 'p2', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate MIME type against safe raster formats and limit file size to 5MB
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validMimeTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {

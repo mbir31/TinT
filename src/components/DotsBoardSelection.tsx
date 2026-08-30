@@ -35,9 +35,11 @@ export const DotsBoardSelection: React.FC<DotsBoardSelectionProps> = ({
   const handleApplyCustom = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
+    const validRows = Math.max(3, Math.min(7, Math.floor(customDotRows) || 4));
+    const validCols = Math.max(3, Math.min(7, Math.floor(customDotCols) || 4));
     onSelectConfig({
-      dotRows: customDotRows,
-      dotCols: customDotCols
+      dotRows: validRows,
+      dotCols: validCols
     });
     onClose();
   };

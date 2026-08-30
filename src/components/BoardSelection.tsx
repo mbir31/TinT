@@ -34,7 +34,8 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
   const [customCols, setCustomCols] = useState<number>(currentConfig.cols);
   const [customWin, setCustomWin] = useState<number>(currentConfig.winLength);
 
-  const handleRowsChange = (newRows: number) => {
+  const handleRowsChange = (rawRows: number) => {
+    const newRows = Math.max(3, Math.min(15, Math.floor(rawRows) || 3));
     setCustomRows(newRows);
     const maxWin = Math.min(newRows, customCols, 5);
     if (customWin > maxWin) {
@@ -42,7 +43,8 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
     }
   };
 
-  const handleColsChange = (newCols: number) => {
+  const handleColsChange = (rawCols: number) => {
+    const newCols = Math.max(3, Math.min(15, Math.floor(rawCols) || 3));
     setCustomCols(newCols);
     const maxWin = Math.min(customRows, newCols, 5);
     if (customWin > maxWin) {
@@ -53,10 +55,15 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
   const handleApplyCustom = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
+    const validRows = Math.max(3, Math.min(15, customRows));
+    const validCols = Math.max(3, Math.min(15, customCols));
+    const maxWin = Math.min(validRows, validCols, 5);
+    const validWin = Math.max(3, Math.min(maxWin, customWin));
+
     onSelectConfig({
-      rows: customRows,
-      cols: customCols,
-      winLength: customWin
+      rows: validRows,
+      cols: validCols,
+      winLength: validWin
     });
     onClose();
   };

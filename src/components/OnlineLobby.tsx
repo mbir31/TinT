@@ -9,7 +9,8 @@ import { TRANSLATIONS } from '../i18n/translations';
 import { soundEngine } from '../engine/soundEngine';
 import { hapticsEngine } from '../engine/hapticsEngine';
 import { isSocketConnected, getSocket } from '../engine/multiplayerEngine';
-import { Copy, Share2, ArrowLeft, Globe, Users, Loader2, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useOnlineStatus } from '../engine/networkStatus';
+import { Copy, Share2, ArrowLeft, Globe, Users, Loader2, Zap, CheckCircle2, AlertCircle, WifiOff } from 'lucide-react';
 
 interface OnlineLobbyProps {
   localPlayer: Player;
@@ -42,6 +43,7 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
   errorMessage
 }) => {
   const t = TRANSLATIONS[language];
+  const isOnlineState = useOnlineStatus();
   const [inputCode, setInputCode] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
@@ -110,11 +112,18 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
     if (!currentRoomId) return;
     soundEngine.playTap();
     const shareUrl = getInviteUrl();
+    const gameName =
+      activeGame === 'dotsboxes'
+        ? (language === 'bn' ? 'ডটস অ্যান্ড বক্সেস (Dots & Boxes)' : 'Dots & Boxes')
+        : activeGame === 'connectfour'
+        ? (language === 'bn' ? 'কানেক্ট ফোর (Connect Four)' : 'Connect Four')
+        : (language === 'bn' ? 'টিক-ট্যাক-টো (Tic-Tac-Toe)' : '3D Tic-Tac-Toe');
+
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'TinT - Bengali 3D Board Game',
-          text: `${localPlayer.name} has invited you to play TinT (3D Tic-Tac-Toe)! Room Code: ${currentRoomId}`,
+          title: `TinT - ${gameName}`,
+          text: `${localPlayer.name} has invited you to play ${gameName}! Room Code: ${currentRoomId}`,
           url: shareUrl
         });
       } catch {
@@ -169,11 +178,19 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
           <div className="flex items-center gap-1.5">
             <span
               className={`w-2 h-2 rounded-full ${
-                isServerReady ? 'bg-[#06D6A0] animate-pulse' : 'bg-[#EF476F]'
+                !isOnlineState
+                  ? 'bg-[#EF476F]'
+                  : isServerReady
+                  ? 'bg-[#06D6A0] animate-pulse'
+                  : 'bg-[#FFD166] animate-pulse'
               }`}
             />
             <span className="font-black text-[10px] sm:text-[11px]">
-              {isServerReady
+              {!isOnlineState
+                ? language === 'bn'
+                  ? 'অফলাইন (ইন্টারনেট বিচ্ছিন্ন)'
+                  : 'Offline (No Internet)'
+                : isServerReady
                 ? language === 'bn'
                   ? 'সক্রিয় (WebSockets Ready)'
                   : 'Active (WebSockets Ready)'
@@ -183,6 +200,23 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Offline Warning Notice if offline */}
+        {!isOnlineState && (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-[#073B4C] text-[#073B4C] text-xs font-bold flex items-start gap-2.5 shadow-[2px_2px_0px_0px_#073B4C]">
+            <WifiOff className="w-5 h-5 text-[#EF476F] flex-shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-black">
+                {language === 'bn' ? 'আপনি বর্তমানে অফলাইনে আছেন' : 'You are currently offline'}
+              </span>
+              <span className="text-[11px] text-[#4A4E69]">
+                {language === 'bn'
+                  ? 'অনলাইন মাল্টিপ্লেয়ার খেলার জন্য ইন্টারনেট সংযোগ প্রয়োজন। আপনার লোকাল খেলা (AI ও ২-প্লেয়ার মোড) ১০০% অফলাইনে কাজ করবে।'
+                  : 'Internet connection is required for online multiplayer. Local 2-Player & AI modes work 100% offline.'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Error Notification Toast */}
         {errorMessage && (
@@ -268,27 +302,27 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
                   </h4>
                 </div>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white border border-[#073B4C] text-[#118AB2]">
-                  {activeGame === 'dots'
-                    ? `${dotsConfig?.gridSize || 3}x${dotsConfig?.gridSize || 3} Dots`
-                    : activeGame === 'connectFour'
-                    ? `${c4Config?.rows || 6}x${c4Config?.cols || 7} C4`
-                    : `${boardConfig.rows}x${boardConfig.cols} Grid`}
+                  {activeGame === 'dotsboxes'
+                    ? `${(dotsConfig?.dotRows || 4) - 1}×${(dotsConfig?.dotCols || 4) - 1} ${language === 'bn' ? 'বক্স' : 'Boxes'}`
+                    : activeGame === 'connectfour'
+                    ? `${c4Config?.cols || 7}×${c4Config?.rows || 6} C4`
+                    : `${boardConfig.rows}×${boardConfig.cols} Grid`}
                 </span>
               </div>
 
               <p className="text-xs font-bold text-[#4A4E69]">
                 {language === 'bn'
                   ? `বর্তমান ${
-                      activeGame === 'dots'
+                      activeGame === 'dotsboxes'
                         ? 'ডটস অ্যান্ড বক্সেস'
-                        : activeGame === 'connectFour'
+                        : activeGame === 'connectfour'
                         ? 'কানেক্ট ফোর'
                         : 'টিক-ট্যাক-টো'
                     } কনফিগারেশনে একটি নতুন খেলার রুম তৈরি করুন`
                   : `Create an online room for ${
-                      activeGame === 'dots'
+                      activeGame === 'dotsboxes'
                         ? 'Dots & Boxes'
-                        : activeGame === 'connectFour'
+                        : activeGame === 'connectfour'
                         ? 'Connect Four'
                         : 'Tic-Tac-Toe'
                     } and invite your friend`}
@@ -296,15 +330,28 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
 
               <button
                 id="btn-create-room"
+                disabled={!isOnlineState}
                 onClick={() => {
                   soundEngine.playTap();
                   hapticsEngine.trigger('medium');
                   onCreateRoom();
                 }}
-                className="w-full py-3 rounded-xl sm:rounded-2xl bg-[#06D6A0] border-2 border-[#073B4C] text-[#073B4C] font-black text-xs sm:text-sm shadow-[3px_3px_0px_0px_#073B4C] hover:bg-[#05c493] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2"
+                className={`w-full py-3 rounded-xl sm:rounded-2xl border-2 border-[#073B4C] text-[#073B4C] font-black text-xs sm:text-sm shadow-[3px_3px_0px_0px_#073B4C] transition-all flex items-center justify-center gap-2 ${
+                  isOnlineState
+                    ? 'bg-[#06D6A0] hover:bg-[#05c493] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                }`}
               >
                 <Users className="w-4 h-4" />
-                <span>{language === 'bn' ? 'রুম তৈরি করুন' : 'Create Room'}</span>
+                <span>
+                  {!isOnlineState
+                    ? language === 'bn'
+                      ? 'অফলাইন (রুম তৈরি নিষ্ক্রিয়)'
+                      : 'Offline (Cannot Create)'
+                    : language === 'bn'
+                    ? 'রুম তৈরি করুন'
+                    : 'Create Room'}
+                </span>
               </button>
             </div>
 
@@ -332,21 +379,22 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
                   id="input-join-room-code"
                   type="text"
                   maxLength={6}
+                  disabled={!isOnlineState}
                   placeholder={t.enterRoomCode || 'Enter 5-letter code'}
                   value={inputCode}
                   onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white border-2 border-[#073B4C] text-[#073B4C] font-black text-center uppercase tracking-widest text-sm sm:text-base font-mono shadow-[2px_2px_0px_0px_#073B4C] focus:outline-none focus:ring-2 focus:ring-[#118AB2]"
+                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white border-2 border-[#073B4C] text-[#073B4C] font-black text-center uppercase tracking-widest text-sm sm:text-base font-mono shadow-[2px_2px_0px_0px_#073B4C] focus:outline-none focus:ring-2 focus:ring-[#118AB2] disabled:opacity-50 disabled:bg-slate-100"
                 />
                 <button
                   id="btn-join-room"
-                  disabled={inputCode.trim().length < 3}
+                  disabled={!isOnlineState || inputCode.trim().length < 3}
                   onClick={() => {
                     soundEngine.playTap();
                     hapticsEngine.trigger('medium');
                     onJoinRoom(inputCode.trim());
                   }}
                   className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl border-2 border-[#073B4C] text-[#073B4C] font-black text-xs sm:text-sm shadow-[3px_3px_0px_0px_#073B4C] transition-all flex items-center gap-1.5 ${
-                    inputCode.trim().length >= 3
+                    isOnlineState && inputCode.trim().length >= 3
                       ? 'bg-[#FFD166] hover:bg-[#ffc947] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none cursor-pointer'
                       : 'bg-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
                   }`}

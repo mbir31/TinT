@@ -6,6 +6,8 @@
 import React, { useState } from 'react';
 import { ConnectFourGameState, Language, CellCoord, Player } from '../types';
 import { PLAYER_THEMES } from '../constants/themes';
+import { soundEngine } from '../engine/soundEngine';
+import { hapticsEngine } from '../engine/hapticsEngine';
 import { AvatarIcon } from './AvatarIcon';
 import { formatNumberByLang } from '../i18n/translations';
 import { ArrowDown, Crown } from 'lucide-react';
@@ -33,10 +35,23 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
 }) => {
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [tilt, setTilt] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [shakingCol, setShakingCol] = useState<number | null>(null);
 
   const { board, config, players, currentPlayerIndex } = gameState;
   const currentPlayer = players[currentPlayerIndex];
   const currentTheme = PLAYER_THEMES[currentPlayer?.colorKey] || PLAYER_THEMES.blue;
+
+  const handleColumnDrop = (col: number) => {
+    if (disabled) return;
+    if (board[0][col] !== null) {
+      soundEngine.playError();
+      hapticsEngine.trigger('invalid');
+      setShakingCol(col);
+      setTimeout(() => setShakingCol(null), 300);
+      return;
+    }
+    onDrop(col);
+  };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!tiltEnabled || disabled) return;
@@ -65,31 +80,32 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-xl mx-auto px-2 select-none">
+    <div className="flex flex-col items-center justify-center w-full max-w-lg landscape:max-w-md sm:max-w-xl mx-auto px-1.5 sm:px-2 select-none">
       {/* Column Hover Indicator & Quick Tap Bar */}
       <div
-        className="grid w-full mb-2 gap-1.5 sm:gap-2 px-3"
+        className="grid w-full mb-1.5 sm:mb-2 gap-1 sm:gap-2 px-1.5 sm:px-3"
         style={{ gridTemplateColumns: `repeat(${config.cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: config.cols }).map((_, c) => {
           const isColFull = board[0][c] !== null;
           const isHovered = hoveredCol === c && !disabled && !isColFull;
+          const isShaking = shakingCol === c;
 
           return (
             <button
               key={`col-btn-${c}`}
               id={`btn-c4-col-${c}`}
-              disabled={disabled || isColFull}
-              onClick={() => onDrop(c)}
+              disabled={disabled}
+              onClick={() => handleColumnDrop(c)}
               onMouseEnter={() => setHoveredCol(c)}
               onMouseLeave={() => setHoveredCol(null)}
-              className={`flex flex-col items-center justify-center py-1.5 rounded-xl border-2 transition-all duration-150 relative ${
+              className={`flex flex-col items-center justify-center py-1 sm:py-1.5 min-h-[38px] sm:min-h-[44px] rounded-xl border-2 transition-all duration-150 relative ${
                 isColFull
-                  ? 'opacity-30 cursor-not-allowed bg-stone-200 border-stone-300 text-stone-400'
+                  ? 'opacity-40 cursor-not-allowed bg-stone-200 border-stone-300 text-stone-500'
                   : isHovered
-                  ? 'bg-amber-300 border-[#073B4C] text-[#073B4C] shadow-[0px_3px_0px_0px_#073B4C] -translate-y-1'
-                  : 'bg-white/80 hover:bg-white border-[#073B4C]/40 text-[#073B4C] hover:border-[#073B4C]'
-              }`}
+                  ? 'bg-amber-300 border-[#073B4C] text-[#073B4C] shadow-[0px_3px_0px_0px_#073B4C] -translate-y-0.5 cursor-pointer'
+                  : 'bg-white/90 hover:bg-white border-[#073B4C]/40 text-[#073B4C] hover:border-[#073B4C] cursor-pointer active:bg-amber-100'
+              } ${isShaking ? 'cell-shake-invalid !border-[#EF476F] ring-2 ring-[#EF476F]' : ''}`}
               title={
                 isColFull
                   ? language === 'bn'
@@ -110,7 +126,7 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
               {/* Ghost Preview Token Floating Above Selected Column */}
               {isHovered && (
                 <div
-                  className="absolute -top-7 w-6 h-6 rounded-full border-2 border-[#073B4C] shadow-md flex items-center justify-center pointer-events-none animate-pulse"
+                  className="absolute -top-7 w-6 h-6 rounded-full border-2 border-[#073B4C] shadow-md flex items-center justify-center pointer-events-none animate-pulse z-20"
                   style={{
                     background: currentTheme.primary,
                     color: currentTheme.text
@@ -137,7 +153,7 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
       >
         <div className="bg-[#1D4ED8] p-3 sm:p-4 rounded-3xl border-4 border-[#073B4C] shadow-[6px_6px_0px_0px_#073B4C] sm:shadow-[8px_8px_0px_0px_#073B4C] relative overflow-hidden">
           {/* Subtle Rack Highlight Shine */}
-          <div className="absolute top-0 left-0 right-0 h-3 bg-white/20 rounded-t-2xl pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-3 bg-white/25 rounded-t-2xl pointer-events-none" />
 
           {/* Grid of Slots */}
           <div
@@ -159,17 +175,13 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
                   <div
                     key={`slot-${r}-${c}`}
                     id={`c4-slot-${r}-${c}`}
-                    onClick={() => {
-                      if (!disabled && board[0][c] === null) {
-                        onDrop(c);
-                      }
-                    }}
+                    onClick={() => handleColumnDrop(c)}
                     onMouseEnter={() => setHoveredCol(c)}
                     className={`aspect-square rounded-full flex items-center justify-center relative cursor-pointer transition-all duration-150 ${
-                      isColHovered && !occupant ? 'bg-[#0f172a]/90' : 'bg-[#0f172a]'
+                      isColHovered && !occupant ? 'bg-[#0f172a]/80' : 'bg-[#0f172a]'
                     } shadow-[inset_0_3px_6px_rgba(0,0,0,0.7)] border-2 ${
                       isWon
-                        ? 'border-[#FFD166] ring-4 ring-[#FFD166]/60 z-10'
+                        ? 'border-[#FFD166] ring-4 ring-[#FFD166]/80 z-10'
                         : isLast
                         ? 'border-white/80'
                         : 'border-[#073B4C]/70'
@@ -179,6 +191,8 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
                     {occupant && theme && (
                       <div
                         className={`w-[88%] h-[88%] rounded-full border-2 border-[#073B4C] shadow-md flex items-center justify-center relative overflow-hidden transition-transform duration-200 ${
+                          isLast ? 'c4-disc-drop-anim' : ''
+                        } ${
                           isWon
                             ? isReplayingWinningMove
                               ? 'scale-110 animate-bounce'
@@ -187,7 +201,8 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
                         }`}
                         style={{
                           background: theme.gradient,
-                          color: theme.text
+                          color: theme.text,
+                          ['--drop-row' as string]: r
                         }}
                       >
                         {/* Token Bevel Ring */}
@@ -214,9 +229,9 @@ export const ConnectFourBoard: React.FC<ConnectFourBoardProps> = ({
                           </div>
                         )}
 
-                        {/* Last Drop Indicator */}
+                        {/* Last Drop Ring Indicator */}
                         {isLast && !isWon && (
-                          <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75 pointer-events-none" />
+                          <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-60 pointer-events-none" />
                         )}
                       </div>
                     )}

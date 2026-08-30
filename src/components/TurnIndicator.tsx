@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, Language } from '../types';
 import { TRANSLATIONS } from '../i18n/translations';
 import { PLAYER_THEMES } from '../constants/themes';
 import { AvatarIcon } from './AvatarIcon';
+import { hapticsEngine } from '../engine/hapticsEngine';
 import { Bot } from 'lucide-react';
 
 interface TurnIndicatorProps {
@@ -24,6 +25,17 @@ export const TurnIndicator: React.FC<TurnIndicatorProps> = ({
 }) => {
   const t = TRANSLATIONS[language];
   const theme = PLAYER_THEMES[player.colorKey] || PLAYER_THEMES.blue;
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!isAiThinking) {
+      hapticsEngine.trigger('turnChange');
+    }
+  }, [player.id, isAiThinking]);
 
   return (
     <div className="w-full flex items-center justify-center my-2 select-none overflow-hidden py-1">

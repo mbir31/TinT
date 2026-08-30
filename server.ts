@@ -48,17 +48,71 @@ const app = express();
 const server = http.createServer(app);
 const PORT = 3000;
 
-// Socket.IO Server configuration
+// Security: Disable express fingerprint
+app.disable('x-powered-by');
+
+// Security: Global Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Content Security Policy permitting WebSocket, inline styles, Google Fonts, and Google AI Studio framing
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-ancestors 'self' https://*.google.com https://*.aistudio.google.com https://ai.studio;"
+  );
+  next();
+});
+
+// JSON Body Parser with strict 1MB payload limit to prevent resource exhaustion DoS
+app.use(express.json({ limit: '1mb' }));
+
+// Socket.IO Server configuration with sanitized origins & safe ping timeouts
 const io = new SocketIOServer(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
   },
-  pingTimeout: 25000,
-  pingInterval: 10000
+  pingTimeout: 20000,
+  pingInterval: 10000,
+  maxHttpBufferSize: 1e6 // 1MB maximum message buffer per socket packet
 });
 
-app.use(express.json({ limit: '5mb' }));
+// ----------------------------------------------------
+// Security Constants & Allowlists
+// ----------------------------------------------------
+const MAX_GLOBAL_ROOMS = 5000;
+const MAX_ROOM_CREATIONS_PER_MIN = 8;
+const ALLOWED_GAME_TYPES: readonly GameType[] = ['tictactoe', 'dotsboxes', 'connectfour'] as const;
+const ALLOWED_AVATARS = new Set([
+  'crown', 'tiger', 'trophy', 'flame', 'star', 'sword',
+  'shield', 'zap', 'robot', 'diamond', 'circle', 'sparkles',
+  'rocket', 'heart', 'gem', 'controller'
+]);
+const ALLOWED_COLOR_KEYS = new Set([
+  'coral', 'blue', 'purple', 'emerald', 'amber', 'rose',
+  'orange', 'teal', 'indigo', 'cyan', 'lime'
+]);
+
+// Validates base64 data URLs exclusively for safe raster images (JPEG, PNG, WebP, GIF)
+const SAFE_IMAGE_DATA_URL_REGEX = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+const SAFE_ROOM_CODE_REGEX = /^[2-9A-HJ-NP-Z]{4,8}$/;
+
+// ----------------------------------------------------
+// Constant-Time String Comparison (Timing-Attack Resistant)
+// ----------------------------------------------------
+function safeCompareTokens(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length || a.length === 0) return false;
+  try {
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
 
 // ----------------------------------------------------
 // Server-Side Room & Player Storage
@@ -95,7 +149,8 @@ interface ServerRoomData {
 const rooms = new Map<string, ServerRoomData>();
 const socketToPlayer = new Map<string, { roomCode: string; playerId: string; playerToken: string }>();
 const disconnectTimers = new Map<string, NodeJS.Timeout>();
-const rateLimitMap = new Map<string, { lastMove: number; lastReaction: number; reactionCount: number }>();
+const rateLimitMap = new Map<string, { lastMove: number; lastReaction: number; reactionCount: number; roomCreations: number; lastReset: number }>();
+const restRateLimitMap = new Map<string, { count: number; lastReset: number }>();
 
 // Helper to generate 5-character alphanumeric room codes (avoiding confusing letters like 0/O, 1/I)
 const ROOM_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -109,7 +164,7 @@ function generateRoomCode(): string {
 }
 
 function generateSecureToken(): string {
-  return 'tok_' + crypto.randomBytes(16).toString('hex');
+  return 'tok_' + crypto.randomBytes(24).toString('hex');
 }
 
 // Convert internal ServerRoomData to safe PublicRoomState (stripping secret tokens and sockets)
@@ -140,20 +195,71 @@ function getPublicRoomState(room: ServerRoomData): PublicRoomState {
   };
 }
 
-// Sanitize player data sent from client
+// Sanitize and escape raw text strings to prevent HTML/script injection
+function sanitizeText(raw: unknown, maxLength: number, fallback: string): string {
+  if (typeof raw !== 'string') return fallback;
+  const stripped = raw
+    .replace(/[<>'"\\&]/g, '') // Strip HTML tags and dangerous characters
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Strip ASCII control characters
+    .trim();
+  return stripped.length > 0 ? stripped.slice(0, maxLength) : fallback;
+}
+
+// Strictly sanitize player profile data from untrusted clients
 function sanitizePlayer(raw: any, defaultId: string): Player {
+  const cleanId = typeof raw?.id === 'string' && SAFE_ID_REGEX.test(raw.id.trim())
+    ? raw.id.trim()
+    : (SAFE_ID_REGEX.test(defaultId) ? defaultId : 'p_' + crypto.randomBytes(4).toString('hex'));
+
+  const cleanName = sanitizeText(raw?.name, 20, 'Player');
+
+  const cleanAvatar = typeof raw?.avatar === 'string' && ALLOWED_AVATARS.has(raw.avatar)
+    ? raw.avatar
+    : 'flame';
+
+  const cleanColorKey = typeof raw?.colorKey === 'string' && ALLOWED_COLOR_KEYS.has(raw.colorKey)
+    ? raw.colorKey
+    : 'coral';
+
+  let cleanPhotoUrl: string | undefined = undefined;
+  if (
+    typeof raw?.photoUrl === 'string' &&
+    raw.photoUrl.length <= 150000 && // 150KB maximum payload limit
+    SAFE_IMAGE_DATA_URL_REGEX.test(raw.photoUrl)
+  ) {
+    cleanPhotoUrl = raw.photoUrl;
+  }
+
   return {
-    id: typeof raw?.id === 'string' && raw.id.trim().length > 0 ? raw.id.trim() : defaultId,
-    name: typeof raw?.name === 'string' && raw.name.trim().length > 0 ? raw.name.trim().slice(0, 24) : 'Player',
-    avatar: typeof raw?.avatar === 'string' ? raw.avatar : 'flame',
-    colorKey: typeof raw?.colorKey === 'string' ? raw.colorKey : 'coral',
-    photoUrl: typeof raw?.photoUrl === 'string' && raw.photoUrl.startsWith('data:image') ? raw.photoUrl.slice(0, 500000) : undefined,
+    id: cleanId,
+    name: cleanName,
+    avatar: cleanAvatar,
+    colorKey: cleanColorKey,
+    photoUrl: cleanPhotoUrl,
     score: 0
   };
 }
 
-// REST API Health & Room Status
+// ----------------------------------------------------
+// REST API with Rate Limiting
+// ----------------------------------------------------
+function checkRestRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = restRateLimitMap.get(ip) || { count: 0, lastReset: now };
+  if (now - entry.lastReset > 60000) {
+    entry.count = 0;
+    entry.lastReset = now;
+  }
+  entry.count += 1;
+  restRateLimitMap.set(ip, entry);
+  return entry.count <= 60; // Max 60 requests per minute
+}
+
 app.get('/api/health', (req, res) => {
+  const clientIp = req.ip || 'unknown';
+  if (!checkRestRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
   res.json({
     status: 'ok',
     engine: 'TinT Production Authoritative Real-time Game Engine',
@@ -163,11 +269,21 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/rooms/:code', (req, res) => {
-  const code = req.params.code.trim().toUpperCase();
-  const room = rooms.get(code);
-  if (!room) {
+  const clientIp = req.ip || 'unknown';
+  if (!checkRestRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  const rawCode = (req.params.code || '').trim().toUpperCase();
+  if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) {
+    return res.status(400).json({ error: 'Invalid room code format' });
+  }
+
+  const room = rooms.get(rawCode);
+  if (!room || room.status === 'abandoned') {
     return res.status(404).json({ error: 'Room not found' });
   }
+
   res.json({
     roomCode: room.roomCode,
     gameType: room.gameType,
@@ -193,16 +309,46 @@ io.on('connection', (socket: Socket) => {
       callback?: (res: { success: boolean; roomCode?: string; playerToken?: string; roomState?: PublicRoomState; error?: string }) => void
     ) => {
       try {
-        const gameType: GameType = payload.gameType && ['tictactoe', 'dotsboxes', 'connectfour'].includes(payload.gameType)
+        if (!payload || typeof payload !== 'object') {
+          if (callback) callback({ success: false, error: 'invalidPayload' });
+          return;
+        }
+
+        // Global Capacity Check (DoS Mitigation)
+        if (rooms.size >= MAX_GLOBAL_ROOMS) {
+          if (callback) callback({ success: false, error: 'serverCapacityFull' });
+          return;
+        }
+
+        // Socket Creation Rate Limit Check
+        const now = Date.now();
+        const socketRate = rateLimitMap.get(socket.id) || { lastMove: 0, lastReaction: 0, reactionCount: 0, roomCreations: 0, lastReset: now };
+        if (now - socketRate.lastReset > 60000) {
+          socketRate.roomCreations = 0;
+          socketRate.lastReset = now;
+        }
+        if (socketRate.roomCreations >= MAX_ROOM_CREATIONS_PER_MIN) {
+          if (callback) callback({ success: false, error: 'rateLimited' });
+          return;
+        }
+        socketRate.roomCreations += 1;
+        rateLimitMap.set(socket.id, socketRate);
+
+        const gameType: GameType = payload.gameType && ALLOWED_GAME_TYPES.includes(payload.gameType)
           ? payload.gameType
           : 'tictactoe';
 
         let roomCode = generateRoomCode();
-        while (rooms.has(roomCode)) {
+        let attempts = 0;
+        while (rooms.has(roomCode) && attempts < 20) {
           roomCode = generateRoomCode();
+          attempts++;
         }
 
-        const hostId = payload.hostPlayer?.id || 'host_' + socket.id.slice(0, 6);
+        const hostId = typeof payload.hostPlayer?.id === 'string' && SAFE_ID_REGEX.test(payload.hostPlayer.id)
+          ? payload.hostPlayer.id
+          : 'host_' + crypto.randomBytes(4).toString('hex');
+
         const host = sanitizePlayer(payload.hostPlayer, hostId);
         const hostToken = generateSecureToken();
 
@@ -214,7 +360,6 @@ io.on('connection', (socket: Socket) => {
           score: 0
         };
 
-        const now = Date.now();
         const serverRoom: ServerRoomData = {
           roomId: `room_${roomCode}`,
           roomCode,
@@ -236,14 +381,14 @@ io.on('connection', (socket: Socket) => {
           updatedAt: now
         };
 
-        // Initialize authoritative game state based on gameType
+        // Authoritative Game Initialization
         if (gameType === 'tictactoe') {
-          const rows = Math.max(3, Math.min(15, Number(payload.config?.rows) || 3));
-          const cols = Math.max(3, Math.min(15, Number(payload.config?.cols) || 3));
-          const maxPossible = Math.min(rows, cols);
+          const rows = Math.max(3, Math.min(15, Math.floor(Number(payload.config?.rows) || 3)));
+          const cols = Math.max(3, Math.min(15, Math.floor(Number(payload.config?.cols) || 3)));
+          const maxPossible = Math.min(rows, cols, 5);
           const defaultWin = getWinLengthForBoard(rows, cols);
-          const winLength = Math.max(3, Math.min(maxPossible, Number(payload.config?.winLength) || defaultWin));
-          const bConfig: BoardConfig = { rows, cols, winLength, presetKey: payload.config?.presetKey };
+          const winLength = Math.max(3, Math.min(maxPossible, Math.floor(Number(payload.config?.winLength) || defaultWin)));
+          const bConfig: BoardConfig = { rows, cols, winLength, presetKey: sanitizeText(payload.config?.presetKey, 16, '3x3') };
           serverRoom.boardConfig = bConfig;
           serverRoom.gameState = {
             id: `game_${now}`,
@@ -260,18 +405,18 @@ io.on('connection', (socket: Socket) => {
             createdAt: now
           };
         } else if (gameType === 'dotsboxes') {
-          const dotRows = Math.max(3, Math.min(6, Number(payload.config?.dotRows) || 4));
-          const dotCols = Math.max(3, Math.min(6, Number(payload.config?.dotCols) || 4));
-          const dConfig: DotsBoardConfig = { dotRows, dotCols, presetKey: payload.config?.presetKey || 'classic-3x3' };
+          const dotRows = Math.max(3, Math.min(7, Math.floor(Number(payload.config?.dotRows) || 4)));
+          const dotCols = Math.max(3, Math.min(7, Math.floor(Number(payload.config?.dotCols) || 4)));
+          const dConfig: DotsBoardConfig = { dotRows, dotCols, presetKey: sanitizeText(payload.config?.presetKey, 16, 'classic-3x3') };
           serverRoom.dotsConfig = dConfig;
           const dotsState = createInitialDotsState([host, dummyGuest], dConfig, 'online');
           dotsState.status = 'idle';
           serverRoom.dotsGameState = dotsState;
         } else if (gameType === 'connectfour') {
-          const rows = Math.max(5, Math.min(7, Number(payload.config?.rows) || 6));
-          const cols = Math.max(6, Math.min(8, Number(payload.config?.cols) || 7));
+          const rows = Math.max(4, Math.min(8, Math.floor(Number(payload.config?.rows) || 6)));
+          const cols = Math.max(5, Math.min(9, Math.floor(Number(payload.config?.cols) || 7)));
           const winLength = 4;
-          const cConfig: ConnectFourConfig = { rows, cols, winLength, presetKey: payload.config?.presetKey || '7x6' };
+          const cConfig: ConnectFourConfig = { rows, cols, winLength, presetKey: sanitizeText(payload.config?.presetKey, 16, '7x6') };
           serverRoom.c4Config = cConfig;
           serverRoom.c4GameState = {
             id: `c4_${now}`,
@@ -304,7 +449,7 @@ io.on('connection', (socket: Socket) => {
         }
       } catch (err: any) {
         console.error('Error creating room:', err);
-        if (callback) callback({ success: false, error: err.message });
+        if (callback) callback({ success: false, error: 'internalServerError' });
       }
     }
   );
@@ -317,37 +462,46 @@ io.on('connection', (socket: Socket) => {
       callback?: (res: { success: boolean; playerToken?: string; roomState?: PublicRoomState; error?: string }) => void
     ) => {
       try {
-        const code = (payload.roomCode || '').trim().toUpperCase();
-        const room = rooms.get(code);
+        if (!payload || typeof payload !== 'object') {
+          if (callback) callback({ success: false, error: 'invalidPayload' });
+          return;
+        }
 
+        const rawCode = (payload.roomCode || '').trim().toUpperCase();
+        if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) {
+          if (callback) callback({ success: false, error: 'invalidRoomCode' });
+          return;
+        }
+
+        const room = rooms.get(rawCode);
         if (!room || room.status === 'abandoned') {
           if (callback) callback({ success: false, error: 'roomNotFound' });
           return;
         }
 
-        // Check if existing host is re-connecting via token or ID
-        if (payload.playerToken && payload.playerToken === room.hostToken) {
+        // Timing-Safe Reconnect Token Authentication for Host
+        if (safeCompareTokens(payload.playerToken, room.hostToken)) {
           room.hostSocketId = socket.id;
           room.hostConnected = true;
           room.hostLastSeen = Date.now();
-          socket.join(`room_${code}`);
-          socketToPlayer.set(socket.id, { roomCode: code, playerId: room.hostPlayer.id, playerToken: room.hostToken });
+          socket.join(`room_${rawCode}`);
+          socketToPlayer.set(socket.id, { roomCode: rawCode, playerId: room.hostPlayer.id, playerToken: room.hostToken });
           if (callback) callback({ success: true, playerToken: room.hostToken, roomState: getPublicRoomState(room) });
           return;
         }
 
-        // Check if existing guest is re-connecting via token
-        if (payload.playerToken && room.guestToken && payload.playerToken === room.guestToken) {
+        // Timing-Safe Reconnect Token Authentication for Guest
+        if (room.guestToken && safeCompareTokens(payload.playerToken, room.guestToken)) {
           room.guestSocketId = socket.id;
           room.guestConnected = true;
           room.guestLastSeen = Date.now();
-          socket.join(`room_${code}`);
-          socketToPlayer.set(socket.id, { roomCode: code, playerId: room.guestPlayer!.id, playerToken: room.guestToken });
+          socket.join(`room_${rawCode}`);
+          socketToPlayer.set(socket.id, { roomCode: rawCode, playerId: room.guestPlayer!.id, playerToken: room.guestToken });
           if (callback) callback({ success: true, playerToken: room.guestToken, roomState: getPublicRoomState(room) });
           return;
         }
 
-        // Enforce room security: Maximum 2 players
+        // Enforce 2-Player Room Security
         if (room.status === 'active' && room.guestPlayer) {
           if (callback) callback({ success: false, error: 'roomFull' });
           return;
@@ -358,7 +512,10 @@ io.on('connection', (socket: Socket) => {
           return;
         }
 
-        const guestId = payload.guestPlayer?.id || 'guest_' + socket.id.slice(0, 6);
+        const guestId = typeof payload.guestPlayer?.id === 'string' && SAFE_ID_REGEX.test(payload.guestPlayer.id)
+          ? payload.guestPlayer.id
+          : 'guest_' + crypto.randomBytes(4).toString('hex');
+
         const guest = sanitizePlayer(payload.guestPlayer, guestId);
         const guestToken = generateSecureToken();
 
@@ -390,19 +547,19 @@ io.on('connection', (socket: Socket) => {
           room.c4GameState.status = 'playing';
         }
 
-        socket.join(`room_${code}`);
-        socketToPlayer.set(socket.id, { roomCode: code, playerId: guest.id, playerToken: guestToken });
+        socket.join(`room_${rawCode}`);
+        socketToPlayer.set(socket.id, { roomCode: rawCode, playerId: guest.id, playerToken: guestToken });
 
-        // Broadcast authoritative room state to all sockets in room
+        // Broadcast authoritative room state
         const pubState = getPublicRoomState(room);
-        io.to(`room_${code}`).emit('room_updated', pubState);
+        io.to(`room_${rawCode}`).emit('room_updated', pubState);
 
         if (callback) {
           callback({ success: true, playerToken: guestToken, roomState: pubState });
         }
       } catch (err: any) {
         console.error('Error joining room:', err);
-        if (callback) callback({ success: false, error: err.message });
+        if (callback) callback({ success: false, error: 'internalServerError' });
       }
     }
   );
@@ -415,29 +572,33 @@ io.on('connection', (socket: Socket) => {
       callback?: (res: { success: boolean; roomState?: PublicRoomState; error?: string }) => void
     ) => {
       try {
-        const code = (payload.roomCode || '').trim().toUpperCase();
-        const room = rooms.get(code);
+        if (!payload || typeof payload !== 'object') {
+          if (callback) callback({ success: false, error: 'invalidPayload' });
+          return;
+        }
 
+        const rawCode = (payload.roomCode || '').trim().toUpperCase();
+        if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) {
+          if (callback) callback({ success: false, error: 'invalidRoomCode' });
+          return;
+        }
+
+        const room = rooms.get(rawCode);
         if (!room || room.status === 'abandoned') {
           if (callback) callback({ success: false, error: 'roomExpired' });
           return;
         }
 
-        let isHost = false;
-        let isGuest = false;
-
-        if (payload.playerToken === room.hostToken) {
-          isHost = true;
-        } else if (room.guestToken && payload.playerToken === room.guestToken) {
-          isGuest = true;
-        }
+        const isHost = safeCompareTokens(payload.playerToken, room.hostToken);
+        const isGuest = room.guestToken ? safeCompareTokens(payload.playerToken, room.guestToken) : false;
 
         if (!isHost && !isGuest) {
           if (callback) callback({ success: false, error: 'unauthorized' });
           return;
         }
 
-        const timerKey = `${code}_${payload.playerId}`;
+        const cleanPlayerId = sanitizeText(payload.playerId, 64, '');
+        const timerKey = `${rawCode}_${cleanPlayerId}`;
         const existingTimer = disconnectTimers.get(timerKey);
         if (existingTimer) {
           clearTimeout(existingTimer);
@@ -454,26 +615,26 @@ io.on('connection', (socket: Socket) => {
           room.guestLastSeen = Date.now();
         }
 
-        socket.join(`room_${code}`);
+        socket.join(`room_${rawCode}`);
         socketToPlayer.set(socket.id, {
-          roomCode: code,
+          roomCode: rawCode,
           playerId: isHost ? room.hostPlayer.id : room.guestPlayer!.id,
           playerToken: payload.playerToken
         });
 
         const pubState = getPublicRoomState(room);
-        io.to(`room_${code}`).emit('player_connection_changed', {
-          playerId: payload.playerId,
+        io.to(`room_${rawCode}`).emit('player_connection_changed', {
+          playerId: cleanPlayerId,
           connected: true
         });
-        io.to(`room_${code}`).emit('room_updated', pubState);
+        io.to(`room_${rawCode}`).emit('room_updated', pubState);
 
         if (callback) {
           callback({ success: true, roomState: pubState });
         }
       } catch (err: any) {
         console.error('Error reconnecting to room:', err);
-        if (callback) callback({ success: false, error: err.message });
+        if (callback) callback({ success: false, error: 'internalServerError' });
       }
     }
   );
@@ -491,9 +652,18 @@ io.on('connection', (socket: Socket) => {
       callback?: (res: { success: boolean; version?: number; error?: string }) => void
     ) => {
       try {
-        const code = (payload.roomCode || '').trim().toUpperCase();
-        const room = rooms.get(code);
+        if (!payload || typeof payload !== 'object' || !payload.payload || typeof payload.payload !== 'object') {
+          if (callback) callback({ success: false, error: 'invalidPayload' });
+          return;
+        }
 
+        const rawCode = (payload.roomCode || '').trim().toUpperCase();
+        if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) {
+          if (callback) callback({ success: false, error: 'invalidRoomCode' });
+          return;
+        }
+
+        const room = rooms.get(rawCode);
         if (!room) {
           if (callback) callback({ success: false, error: 'roomNotFound' });
           return;
@@ -504,14 +674,14 @@ io.on('connection', (socket: Socket) => {
           return;
         }
 
-        // Authenticate player token
+        // Timing-Safe Authentication
         let activePlayer: Player | null = null;
         let isHost = false;
 
-        if (payload.playerToken === room.hostToken) {
+        if (safeCompareTokens(payload.playerToken, room.hostToken)) {
           activePlayer = room.hostPlayer;
           isHost = true;
-        } else if (room.guestToken && payload.playerToken === room.guestToken) {
+        } else if (room.guestToken && safeCompareTokens(payload.playerToken, room.guestToken)) {
           activePlayer = room.guestPlayer;
           isHost = false;
         }
@@ -521,27 +691,26 @@ io.on('connection', (socket: Socket) => {
           return;
         }
 
-        // Rate limiting
+        // Move Rate Limiting per Socket (min 50ms interval between moves)
         const now = Date.now();
-        const rateInfo = rateLimitMap.get(payload.playerToken) || { lastMove: 0, lastReaction: 0, reactionCount: 0 };
-        if (now - rateInfo.lastMove < 40) {
+        const rateInfo = rateLimitMap.get(socket.id) || { lastMove: 0, lastReaction: 0, reactionCount: 0, roomCreations: 0, lastReset: now };
+        if (now - rateInfo.lastMove < 50) {
           if (callback) callback({ success: false, error: 'rateLimited' });
           return;
         }
         rateInfo.lastMove = now;
-        rateLimitMap.set(payload.playerToken, rateInfo);
+        rateLimitMap.set(socket.id, rateInfo);
 
-        // Sequence number check (idempotency / race prevention)
-        if (typeof payload.expectedVersion === 'number' && payload.expectedVersion < room.version) {
-          // Client might have stale state; send back latest state without failing catastrophically
+        // Sequence number check
+        if (typeof payload.expectedVersion === 'number' && Number.isInteger(payload.expectedVersion) && payload.expectedVersion < room.version) {
           if (callback) callback({ success: false, version: room.version, error: 'staleVersion' });
           socket.emit('room_updated', getPublicRoomState(room));
           return;
         }
 
-        // EXECUTE AND VALIDATE MOVE BASED ON GAME TYPE
         const moveData = payload.payload;
 
+        // 4A. TIC-TAC-TOE MOVE VALIDATION
         if (room.gameType === 'tictactoe' && moveData.gameType === 'tictactoe' && room.gameState) {
           const gs = room.gameState;
           if (gs.status !== 'playing') {
@@ -550,8 +719,18 @@ io.on('connection', (socket: Socket) => {
           }
 
           const currentTurnPlayer = gs.players[gs.currentPlayerIndex];
-          if (currentTurnPlayer.id !== activePlayer.id) {
+          if (!currentTurnPlayer || currentTurnPlayer.id !== activePlayer.id) {
             if (callback) callback({ success: false, error: 'notYourTurn' });
+            return;
+          }
+
+          if (
+            !moveData.move ||
+            typeof moveData.move !== 'object' ||
+            !Number.isInteger(moveData.move.row) ||
+            !Number.isInteger(moveData.move.col)
+          ) {
+            if (callback) callback({ success: false, error: 'invalidMoveCoordinates' });
             return;
           }
 
@@ -602,7 +781,9 @@ io.on('connection', (socket: Socket) => {
             isDraw,
             winningCells: winResult.winningCells
           };
-        } else if (room.gameType === 'dotsboxes' && moveData.gameType === 'dotsboxes' && room.dotsGameState) {
+        }
+        // 4B. DOTS & BOXES MOVE VALIDATION
+        else if (room.gameType === 'dotsboxes' && moveData.gameType === 'dotsboxes' && room.dotsGameState) {
           const ds = room.dotsGameState;
           if (ds.status !== 'playing') {
             if (callback) callback({ success: false, error: 'gameNotPlaying' });
@@ -610,8 +791,19 @@ io.on('connection', (socket: Socket) => {
           }
 
           const currentTurnPlayer = ds.players[ds.currentPlayerIndex];
-          if (currentTurnPlayer.id !== activePlayer.id) {
+          if (!currentTurnPlayer || currentTurnPlayer.id !== activePlayer.id) {
             if (callback) callback({ success: false, error: 'notYourTurn' });
+            return;
+          }
+
+          if (
+            !moveData.line ||
+            typeof moveData.line !== 'object' ||
+            (moveData.line.orientation !== 'horizontal' && moveData.line.orientation !== 'vertical') ||
+            !Number.isInteger(moveData.line.row) ||
+            !Number.isInteger(moveData.line.col)
+          ) {
+            if (callback) callback({ success: false, error: 'invalidLineData' });
             return;
           }
 
@@ -621,7 +813,6 @@ io.on('connection', (socket: Socket) => {
             return;
           }
 
-          // Apply line
           const { orientation, row, col } = line;
           if (orientation === 'horizontal') {
             ds.horizontalLines[row][col] = activePlayer.id;
@@ -631,7 +822,6 @@ io.on('connection', (socket: Socket) => {
           line.ownerId = activePlayer.id;
           ds.lastLine = line;
 
-          // Check for completed boxes
           const boxRows = ds.config.dotRows - 1;
           const boxCols = ds.config.dotCols - 1;
           const newlyCompleted: { row: number; col: number }[] = [];
@@ -656,14 +846,13 @@ io.on('connection', (socket: Socket) => {
           }
 
           ds.lastCompletedBoxes = newlyCompleted;
-          let hasBonus = newlyCompleted.length > 0;
+          const hasBonus = newlyCompleted.length > 0;
           ds.consecutiveTurn = hasBonus;
 
           if (!hasBonus) {
             ds.currentPlayerIndex = 1 - ds.currentPlayerIndex;
           }
 
-          // Check if all boxes are captured
           let totalCaptured = 0;
           for (let r = 0; r < boxRows; r++) {
             for (let c = 0; c < boxCols; c++) {
@@ -701,7 +890,9 @@ io.on('connection', (socket: Socket) => {
             consecutiveTurn: hasBonus,
             isGameOver
           };
-        } else if (room.gameType === 'connectfour' && moveData.gameType === 'connectfour' && room.c4GameState) {
+        }
+        // 4C. CONNECT FOUR MOVE VALIDATION
+        else if (room.gameType === 'connectfour' && moveData.gameType === 'connectfour' && room.c4GameState) {
           const c4 = room.c4GameState;
           if (c4.status !== 'playing') {
             if (callback) callback({ success: false, error: 'gameNotPlaying' });
@@ -709,8 +900,13 @@ io.on('connection', (socket: Socket) => {
           }
 
           const currentTurnPlayer = c4.players[c4.currentPlayerIndex];
-          if (currentTurnPlayer.id !== activePlayer.id) {
+          if (!currentTurnPlayer || currentTurnPlayer.id !== activePlayer.id) {
             if (callback) callback({ success: false, error: 'notYourTurn' });
+            return;
+          }
+
+          if (!Number.isInteger(moveData.col)) {
+            if (callback) callback({ success: false, error: 'invalidColumn' });
             return;
           }
 
@@ -726,7 +922,6 @@ io.on('connection', (socket: Socket) => {
             return;
           }
 
-          // Apply drop
           c4.board[targetRow][col] = activePlayer.id;
           c4.lastDrop = { row: targetRow, col };
 
@@ -765,20 +960,18 @@ io.on('connection', (socket: Socket) => {
           return;
         }
 
-        // Monotonically increase version sequence number
         room.version += 1;
         room.updatedAt = now;
 
-        // Broadcast authoritative room state to all clients in room
         const pubState = getPublicRoomState(room);
-        io.to(`room_${code}`).emit('room_updated', pubState);
+        io.to(`room_${rawCode}`).emit('room_updated', pubState);
 
         if (callback) {
           callback({ success: true, version: room.version });
         }
       } catch (err: any) {
         console.error('Error executing authoritative move:', err);
-        if (callback) callback({ success: false, error: err.message });
+        if (callback) callback({ success: false, error: 'internalServerError' });
       }
     }
   );
@@ -791,17 +984,27 @@ io.on('connection', (socket: Socket) => {
       callback?: (res: { success: boolean; error?: string }) => void
     ) => {
       try {
-        const code = (payload.roomCode || '').trim().toUpperCase();
-        const room = rooms.get(code);
+        if (!payload || typeof payload !== 'object') {
+          if (callback) callback({ success: false, error: 'invalidPayload' });
+          return;
+        }
+
+        const rawCode = (payload.roomCode || '').trim().toUpperCase();
+        if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) {
+          if (callback) callback({ success: false, error: 'invalidRoomCode' });
+          return;
+        }
+
+        const room = rooms.get(rawCode);
         if (!room) {
           if (callback) callback({ success: false, error: 'roomNotFound' });
           return;
         }
 
         let playerId: string | null = null;
-        if (payload.playerToken === room.hostToken) {
+        if (safeCompareTokens(payload.playerToken, room.hostToken)) {
           playerId = room.hostPlayer.id;
-        } else if (room.guestToken && payload.playerToken === room.guestToken) {
+        } else if (room.guestToken && safeCompareTokens(payload.playerToken, room.guestToken)) {
           playerId = room.guestPlayer?.id || null;
         }
 
@@ -816,7 +1019,6 @@ io.on('connection', (socket: Socket) => {
         const guestVoted = room.guestPlayer ? room.rematchVotes[room.guestPlayer.id] : false;
 
         if (hostVoted && guestVoted && room.guestPlayer) {
-          // Both agreed: reset board authoritatively with existing players and config
           const now = Date.now();
           const players: [Player, Player] = [room.hostPlayer, room.guestPlayer];
 
@@ -867,48 +1069,53 @@ io.on('connection', (socket: Socket) => {
           room.updatedAt = Date.now();
         }
 
-        io.to(`room_${code}`).emit('room_updated', getPublicRoomState(room));
+        io.to(`room_${rawCode}`).emit('room_updated', getPublicRoomState(room));
         if (callback) callback({ success: true });
       } catch (err: any) {
         console.error('Error requesting rematch:', err);
-        if (callback) callback({ success: false, error: err.message });
+        if (callback) callback({ success: false, error: 'internalServerError' });
       }
     }
   );
 
-  // 6. QUICK REACTION EMOJIS (Rate-limited)
+  // 6. QUICK REACTION EMOJIS (Strict Rate-Limiting & Sanitization)
   socket.on(
     'send_reaction',
     (payload: { roomCode: string; playerToken: string; emoji: string }) => {
       try {
-        const code = (payload.roomCode || '').trim().toUpperCase();
-        const room = rooms.get(code);
+        if (!payload || typeof payload !== 'object') return;
+
+        const rawCode = (payload.roomCode || '').trim().toUpperCase();
+        if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) return;
+
+        const room = rooms.get(rawCode);
         if (!room) return;
 
         let player: Player | null = null;
-        if (payload.playerToken === room.hostToken) {
+        if (safeCompareTokens(payload.playerToken, room.hostToken)) {
           player = room.hostPlayer;
-        } else if (room.guestToken && payload.playerToken === room.guestToken) {
+        } else if (room.guestToken && safeCompareTokens(payload.playerToken, room.guestToken)) {
           player = room.guestPlayer;
         }
         if (!player) return;
 
-        // Rate limit: max 4 per 2 seconds
+        // Rate limit: max 4 reactions per 2 seconds
         const now = Date.now();
-        const rateInfo = rateLimitMap.get(payload.playerToken) || { lastMove: 0, lastReaction: 0, reactionCount: 0 };
+        const rateInfo = rateLimitMap.get(socket.id) || { lastMove: 0, lastReaction: 0, reactionCount: 0, roomCreations: 0, lastReset: now };
         if (now - rateInfo.lastReaction > 2000) {
           rateInfo.reactionCount = 0;
         }
-        if (rateInfo.reactionCount >= 5) {
+        if (rateInfo.reactionCount >= 4) {
           return;
         }
         rateInfo.lastReaction = now;
         rateInfo.reactionCount += 1;
-        rateLimitMap.set(payload.playerToken, rateInfo);
+        rateLimitMap.set(socket.id, rateInfo);
 
-        const safeEmoji = typeof payload.emoji === 'string' ? payload.emoji.slice(0, 4) : '👍';
-        io.to(`room_${code}`).emit('reaction_received', {
-          roomCode: code,
+        // Sanitize emoji character
+        const safeEmoji = sanitizeText(payload.emoji, 4, '👍');
+        io.to(`room_${rawCode}`).emit('reaction_received', {
+          roomCode: rawCode,
           emoji: safeEmoji,
           senderName: player.name,
           senderId: player.id
@@ -922,29 +1129,34 @@ io.on('connection', (socket: Socket) => {
   // 7. LEAVE ROOM
   socket.on('leave_room', (payload: { roomCode: string; playerToken: string }) => {
     try {
-      const code = (payload.roomCode || '').trim().toUpperCase();
-      const room = rooms.get(code);
+      if (!payload || typeof payload !== 'object') return;
+
+      const rawCode = (payload.roomCode || '').trim().toUpperCase();
+      if (!SAFE_ROOM_CODE_REGEX.test(rawCode)) return;
+
+      const room = rooms.get(rawCode);
       if (room) {
-        let isHost = payload.playerToken === room.hostToken;
-        let isGuest = room.guestToken && payload.playerToken === room.guestToken;
+        const isHost = safeCompareTokens(payload.playerToken, room.hostToken);
+        const isGuest = room.guestToken ? safeCompareTokens(payload.playerToken, room.guestToken) : false;
 
         if (isHost || isGuest) {
           room.status = 'abandoned';
           room.updatedAt = Date.now();
           const leavingId = isHost ? room.hostPlayer.id : (room.guestPlayer?.id || 'guest');
-          io.to(`room_${code}`).emit('opponent_left', { playerId: leavingId });
-          io.to(`room_${code}`).emit('room_updated', getPublicRoomState(room));
+          io.to(`room_${rawCode}`).emit('opponent_left', { playerId: leavingId });
+          io.to(`room_${rawCode}`).emit('room_updated', getPublicRoomState(room));
         }
       }
-      socket.leave(`room_${code}`);
+      socket.leave(`room_${rawCode}`);
       socketToPlayer.delete(socket.id);
     } catch (err) {
       console.error('Error leaving room:', err);
     }
   });
 
-  // 8. DISCONNECT HANDLING WITH GRACE PERIOD
+  // 8. DISCONNECT HANDLING WITH GRACE PERIOD & CLEANUP
   socket.on('disconnect', () => {
+    rateLimitMap.delete(socket.id);
     const info = socketToPlayer.get(socket.id);
     if (!info) return;
 
@@ -954,8 +1166,8 @@ io.on('connection', (socket: Socket) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    const isHost = playerToken === room.hostToken;
-    const isGuest = room.guestToken && playerToken === room.guestToken;
+    const isHost = safeCompareTokens(playerToken, room.hostToken);
+    const isGuest = room.guestToken ? safeCompareTokens(playerToken, room.guestToken) : false;
 
     if (!isHost && !isGuest) return;
 
@@ -967,14 +1179,13 @@ io.on('connection', (socket: Socket) => {
       room.guestLastSeen = Date.now();
     }
 
-    // Inform remaining player of disconnection immediately
     io.to(`room_${roomCode}`).emit('player_connection_changed', {
       playerId,
       connected: false
     });
     io.to(`room_${roomCode}`).emit('room_updated', getPublicRoomState(room));
 
-    // Start 75-second grace timer before marking room abandoned
+    // 75-second grace timer
     const timerKey = `${roomCode}_${playerId}`;
     const timer = setTimeout(() => {
       disconnectTimers.delete(timerKey);
@@ -994,7 +1205,7 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-// Periodic garbage collection for expired rooms older than 30 minutes
+// Periodic garbage collection for expired rooms and rate limit maps
 setInterval(() => {
   const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
   for (const [code, r] of rooms.entries()) {
@@ -1002,7 +1213,14 @@ setInterval(() => {
       rooms.delete(code);
     }
   }
-}, 5 * 60 * 1000);
+
+  const oneMinuteAgo = Date.now() - 60 * 1000;
+  for (const [ip, entry] of restRateLimitMap.entries()) {
+    if (entry.lastReset < oneMinuteAgo) {
+      restRateLimitMap.delete(ip);
+    }
+  }
+}, 3 * 60 * 1000);
 
 // Vite middleware & Production static serving
 async function startServer() {
@@ -1026,4 +1244,5 @@ async function startServer() {
 }
 
 startServer();
+
 

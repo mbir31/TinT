@@ -35,9 +35,11 @@ export const ConnectFourBoardSelection: React.FC<ConnectFourBoardSelectionProps>
   const handleApplyCustom = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
+    const validRows = Math.max(4, Math.min(8, Math.floor(customRows) || 6));
+    const validCols = Math.max(5, Math.min(9, Math.floor(customCols) || 7));
     onSelectConfig({
-      rows: customRows,
-      cols: customCols,
+      rows: validRows,
+      cols: validCols,
       winLength: 4
     });
     onClose();

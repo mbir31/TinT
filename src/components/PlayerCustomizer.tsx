@@ -53,14 +53,43 @@ export const PlayerCustomizer: React.FC<PlayerCustomizerProps> = ({
   const handleSaveAll = () => {
     soundEngine.playTap();
     hapticsEngine.trigger('tap');
-    onSave(p1State, p2State, aiState);
+
+    const cleanP1: Player = {
+      ...p1State,
+      name: p1State.name.trim().slice(0, 15) || (language === 'bn' ? 'খেলোয়াড় ১' : 'Player 1')
+    };
+
+    const cleanP2: Player = {
+      ...p2State,
+      name: p2State.name.trim().slice(0, 15) || (language === 'bn' ? 'খেলোয়াড় ২' : 'Player 2')
+    };
+
+    const cleanAi: Player = {
+      ...aiState,
+      name: aiState.name.trim().slice(0, 15) || (language === 'bn' ? 'রোবো' : 'AI Bot')
+    };
+
+    onSave(cleanP1, cleanP2, cleanAi);
     onClose();
   };
 
-  // Image Selection Handlers
+  // Image Selection Handlers with safe MIME & file size validation
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate MIME type against safe raster image formats (reject SVG, HTML, scripts)
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validMimeTypes.includes(file.type)) {
+      e.target.value = '';
+      return;
+    }
+
+    // Limit maximum raw file size to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -71,14 +100,14 @@ export const PlayerCustomizer: React.FC<PlayerCustomizerProps> = ({
       }
     };
     reader.readAsDataURL(file);
-    // Reset file input value so user can re-select same file if needed
     e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (file && validMimeTypes.includes(file.type) && file.size <= 5 * 1024 * 1024) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;

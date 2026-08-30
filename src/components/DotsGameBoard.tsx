@@ -7,6 +7,8 @@ import React, { useState, useRef, useCallback, memo } from 'react';
 import { DotsGameState, DotsLine, Player, Language } from '../types';
 import { PLAYER_THEMES } from '../constants/themes';
 import { TRANSLATIONS, formatNumberByLang } from '../i18n/translations';
+import { soundEngine } from '../engine/soundEngine';
+import { hapticsEngine } from '../engine/hapticsEngine';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface DotsGameBoardProps {
@@ -91,15 +93,15 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
   const PADDING = 34; // Outer edge padding
   const DOT_RADIUS = 8.5; // Peg radius
   const LINE_WIDTH = 9; // Line thickness
-  const HIT_TARGET_SIZE = 34; // Touch hit area thickness
+  const HIT_TARGET_SIZE = 40; // Generous touch hit area thickness for mobile ease
 
   const svgWidth = (dotCols - 1) * CELL_SIZE + 2 * PADDING;
   const svgHeight = (dotRows - 1) * CELL_SIZE + 2 * PADDING;
 
   return (
-    <div className="w-full max-w-lg mx-auto flex flex-col items-center select-none px-2 sm:px-4 py-1">
+    <div className="w-full max-w-lg landscape:max-w-md mx-auto flex flex-col items-center select-none px-2 sm:px-4 py-1">
       {/* Real-time Status & Scores HUD */}
-      <div className="w-full flex items-center justify-between gap-2 mb-2 px-3 py-2 rounded-2xl bg-white border-2 sm:border-3 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C]">
+      <div className="w-full flex items-center justify-between gap-2 mb-1.5 px-3 py-1.5 rounded-2xl bg-white border-2 sm:border-3 border-[#073B4C] shadow-[3px_3px_0px_0px_#073B4C]">
         {/* Player 1 Score */}
         <div className="flex items-center gap-1.5 min-w-0">
           <div
@@ -115,7 +117,7 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
         </div>
 
         {/* Remaining Boxes / Progress Pill */}
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FFF9F0] border border-[#073B4C]/30 text-[11px] font-bold text-[#4A4E69]">
+        <div className="flex items-center gap-1 px-2.5 py-0.5 sm:py-1 rounded-xl bg-[#FFF9F0] border border-[#073B4C]/30 text-[11px] font-bold text-[#4A4E69]">
           <CheckCircle2 className="w-3.5 h-3.5 text-[#06D6A0]" />
           <span>
             {language === 'bn'
@@ -141,7 +143,7 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
 
       {/* Bonus Turn Notification Banner */}
       {gameState.consecutiveTurn && (
-        <div className="flex items-center gap-1.5 px-4 py-1.5 mb-2 rounded-full bg-[#FFD166] border-2 border-[#073B4C] text-[#073B4C] text-xs sm:text-sm font-black shadow-[2px_2px_0px_0px_#073B4C] animate-bounce">
+        <div className="flex items-center gap-1.5 px-4 py-1 mb-1.5 rounded-full bg-[#FFD166] border-2 border-[#073B4C] text-[#073B4C] text-xs sm:text-sm font-black shadow-[2px_2px_0px_0px_#073B4C] animate-bounce">
           <Sparkles className="w-4 h-4 text-[#EF476F]" />
           <span>
             {language === 'bn'
@@ -156,7 +158,7 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
         {/* Crisp SVG Board */}
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full max-w-[440px] h-auto select-none overflow-visible"
+          className="w-full max-w-[440px] max-h-[58vh] h-auto select-none overflow-visible"
           style={{ touchAction: 'manipulation' }}
         >
           <defs>

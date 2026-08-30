@@ -39,7 +39,12 @@ import {
   loadUserSettings,
   saveUserSettings,
   saveActiveLocalGame,
-  loadActiveLocalGame
+  loadActiveLocalGame,
+  saveActiveDotsGame,
+  loadActiveDotsGame,
+  saveActiveConnectFourGame,
+  loadActiveConnectFourGame,
+  logCompletedMatch
 } from './engine/storage';
 import {
   recordGameWinAndCheckAchievements,
@@ -73,6 +78,7 @@ import { TRANSLATIONS } from './i18n/translations';
 import { BOARD_PRESETS } from './constants/themes';
 
 import { Header } from './components/Header';
+import { WelcomeHub } from './components/WelcomeHub';
 import { ModeSelection } from './components/ModeSelection';
 import { GameBoard } from './components/GameBoard';
 import { DotsGameBoard } from './components/DotsGameBoard';
@@ -91,11 +97,13 @@ import { OnlineLobby } from './components/OnlineLobby';
 import { OnlineReactions, FloatingReaction } from './components/OnlineReactions';
 import { CountdownOverlay } from './components/CountdownOverlay';
 import { InstallPrompt } from './components/InstallPrompt';
+import { PwaUpdateToast } from './components/PwaUpdateToast';
 import { FooterCredit } from './components/FooterCredit';
 import { LocalSetupModal } from './components/LocalSetupModal';
+import { CelebrationEffects } from './components/CelebrationEffects';
 import { RotateCcw, ArrowLeft, SlidersHorizontal, AlertTriangle } from 'lucide-react';
 
-type ScreenView = 'mode-select' | 'online-lobby' | 'playing';
+type ScreenView = 'welcome' | 'mode-select' | 'online-lobby' | 'playing';
 
 export default function App() {
   // 1. Settings State
@@ -111,7 +119,7 @@ export default function App() {
   const [activeGame, setActiveGame] = useState<GameType>(settings.activeGameType || 'tictactoe');
 
   // 3. Navigation State
-  const [currentView, setCurrentView] = useState<ScreenView>('mode-select');
+  const [currentView, setCurrentView] = useState<ScreenView>('welcome');
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showBoardModal, setShowBoardModal] = useState<boolean>(false);
   const [showDotsBoardModal, setShowDotsBoardModal] = useState<boolean>(false);
@@ -169,11 +177,15 @@ export default function App() {
 
   // 7. Game State (Dots & Boxes)
   const [dotsGameState, setDotsGameState] = useState<DotsGameState>(() => {
+    const saved = loadActiveDotsGame();
+    if (saved) return saved;
     return createInitialDotsState([player1, player2], dotsConfig, 'local');
   });
 
   // 8. Game State (Connect Four)
   const [c4GameState, setC4GameState] = useState<ConnectFourGameState>(() => {
+    const saved = loadActiveConnectFourGame();
+    if (saved) return saved;
     return createInitialConnectFourState(c4Config, player1, player2, 'local');
   });
 
@@ -544,12 +556,13 @@ export default function App() {
 
       if (result.isGameOver) {
         setIsResultModalDismissedForReplay(false);
+        const winner = result.nextState.status === 'won'
+          ? result.nextState.players.find((p) => p.id === result.nextState.winnerPlayerId)
+          : null;
+
         if (result.nextState.status === 'won') {
           soundEngine.playWin();
           hapticsEngine.trigger('win');
-          const winner = result.nextState.players.find(
-            (p) => p.id === result.nextState.winnerPlayerId
-          );
           if (winner) {
             triggerAchievementCheck(
               winner,
@@ -572,9 +585,21 @@ export default function App() {
           hapticsEngine.trigger('draw');
           recordGameLossOrDraw();
         }
+
+        // Log completed match to IndexedDB
+        logCompletedMatch(
+          'connectfour',
+          c4GameState.mode,
+          `${c4GameState.config.cols}x${c4GameState.config.rows}`,
+          winner ? winner.name : null,
+          winner ? winner.colorKey : '',
+          result.nextState.status === 'won' ? 'won' : 'draw',
+          result.nextState.moveCount
+        );
       }
 
       setC4GameState(result.nextState);
+      saveActiveConnectFourGame(result.nextState);
     },
     [c4GameState, isC4AiThinking, activeMode, roomCode, localPlayerToken, roomState, localOnlineId, player1.id, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
@@ -606,12 +631,13 @@ export default function App() {
 
             if (result.isGameOver) {
               setIsResultModalDismissedForReplay(false);
+              const winner = result.nextState.status === 'won'
+                ? result.nextState.players.find((p) => p.id === result.nextState.winnerPlayerId)
+                : null;
+
               if (result.nextState.status === 'won') {
                 soundEngine.playWin();
                 hapticsEngine.trigger('win');
-                const winner = result.nextState.players.find(
-                  (p) => p.id === result.nextState.winnerPlayerId
-                );
                 if (winner && !winner.isAI) {
                   triggerAchievementCheck(
                     winner,
@@ -628,9 +654,21 @@ export default function App() {
                 hapticsEngine.trigger('draw');
                 recordGameLossOrDraw();
               }
+
+              // Log match
+              logCompletedMatch(
+                'connectfour',
+                'ai',
+                `${c4GameState.config.cols}x${c4GameState.config.rows}`,
+                winner ? winner.name : null,
+                winner ? winner.colorKey : '',
+                result.nextState.status === 'won' ? 'won' : 'draw',
+                result.nextState.moveCount
+              );
             }
 
             setC4GameState(result.nextState);
+            saveActiveConnectFourGame(result.nextState);
           }
         } finally {
           setIsC4AiThinking(false);
@@ -677,12 +715,13 @@ export default function App() {
       if (result.isGameOver) {
         setWinningDotsLine(line);
         setIsResultModalDismissedForReplay(false);
+        const winner = result.nextState.status === 'won'
+          ? result.nextState.players.find((p) => p.id === result.nextState.winnerPlayerId)
+          : null;
+
         if (result.nextState.status === 'won') {
           soundEngine.playWin();
           hapticsEngine.trigger('win');
-          const winner = result.nextState.players.find(
-            (p) => p.id === result.nextState.winnerPlayerId
-          );
           if (winner) {
             const winnerScore = result.nextState.playerScores[winner.id] || 0;
             triggerAchievementCheck(
@@ -698,9 +737,21 @@ export default function App() {
           hapticsEngine.trigger('draw');
           recordGameLossOrDraw();
         }
+
+        // Log completed match to IndexedDB
+        logCompletedMatch(
+          'dotsboxes',
+          dotsGameState.mode,
+          `${dotsGameState.config.dotRows - 1}x${dotsGameState.config.dotCols - 1}`,
+          winner ? winner.name : null,
+          winner ? winner.colorKey : '',
+          result.nextState.status === 'won' ? 'won' : 'draw',
+          result.nextState.moveCount
+        );
       }
 
       setDotsGameState(result.nextState);
+      saveActiveDotsGame(result.nextState);
     },
     [dotsGameState, isDotsAiThinking, activeMode, roomCode, localPlayerToken, roomState, localOnlineId, player2.id, aiPlayer.id, triggerAchievementCheck]
   );
@@ -731,12 +782,13 @@ export default function App() {
             if (result.isGameOver) {
               setWinningDotsLine(move);
               setIsResultModalDismissedForReplay(false);
+              const winner = result.nextState.status === 'won'
+                ? result.nextState.players.find((p) => p.id === result.nextState.winnerPlayerId)
+                : null;
+
               if (result.nextState.status === 'won') {
                 soundEngine.playWin();
                 hapticsEngine.trigger('win');
-                const winner = result.nextState.players.find(
-                  (p) => p.id === result.nextState.winnerPlayerId
-                );
                 if (winner && !winner.isAI) {
                   const winnerScore = result.nextState.playerScores[winner.id] || 0;
                   triggerAchievementCheck(
@@ -754,9 +806,21 @@ export default function App() {
                 hapticsEngine.trigger('draw');
                 recordGameLossOrDraw();
               }
+
+              // Log completed match
+              logCompletedMatch(
+                'dotsboxes',
+                'ai',
+                `${dotsGameState.config.dotRows - 1}x${dotsGameState.config.dotCols - 1}`,
+                winner ? winner.name : null,
+                winner ? winner.colorKey : '',
+                result.nextState.status === 'won' ? 'won' : 'draw',
+                result.nextState.moveCount
+              );
             }
 
             setDotsGameState(result.nextState);
+            saveActiveDotsGame(result.nextState);
           }
         } finally {
           setIsDotsAiThinking(false);
@@ -831,12 +895,32 @@ export default function App() {
         } else if (currentPlayer.id === aiPlayer.id) {
           setAiPlayer((prev) => ({ ...prev, score: prev.score + 1 }));
         }
+
+        logCompletedMatch(
+          'tictactoe',
+          gameState.mode,
+          `${gameState.boardConfig.rows}x${gameState.boardConfig.cols}`,
+          currentPlayer.name,
+          currentPlayer.colorKey,
+          'won',
+          gameState.moveCount + 1
+        );
       } else if (isBoardFull(newBoard)) {
         nextStatus = 'draw';
         setIsResultModalDismissedForReplay(false);
         soundEngine.playDraw();
         hapticsEngine.trigger('draw');
         recordGameLossOrDraw();
+
+        logCompletedMatch(
+          'tictactoe',
+          gameState.mode,
+          `${gameState.boardConfig.rows}x${gameState.boardConfig.cols}`,
+          null,
+          '',
+          'draw',
+          gameState.moveCount + 1
+        );
       }
 
       const nextPlayerIndex = nextStatus === 'playing' ? (gameState.currentPlayerIndex === 0 ? 1 : 0) : gameState.currentPlayerIndex;
@@ -908,10 +992,30 @@ export default function App() {
               setIsResultModalDismissedForReplay(false);
               setAiPlayer((prev) => ({ ...prev, score: prev.score + 1 }));
               recordGameLossOrDraw();
+
+              logCompletedMatch(
+                'tictactoe',
+                'ai',
+                `${gameState.boardConfig.rows}x${gameState.boardConfig.cols}`,
+                aiBot.name,
+                aiBot.colorKey,
+                'won',
+                gameState.moveCount + 1
+              );
             } else if (isBoardFull(newBoard)) {
               nextStatus = 'draw';
               setIsResultModalDismissedForReplay(false);
               recordGameLossOrDraw();
+
+              logCompletedMatch(
+                'tictactoe',
+                'ai',
+                `${gameState.boardConfig.rows}x${gameState.boardConfig.cols}`,
+                null,
+                '',
+                'draw',
+                gameState.moveCount + 1
+              );
             }
 
             const nextGame: GameState = {
@@ -1284,7 +1388,7 @@ export default function App() {
       handleLeaveOnline();
     }
     saveActiveLocalGame(null);
-    setCurrentView('mode-select');
+    setCurrentView('welcome');
   };
 
   // Save customized players
@@ -1424,7 +1528,7 @@ export default function App() {
     : undefined;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FFF9F0] text-[#073B4C] font-sans antialiased selection:bg-[#FFD166] selection:text-[#073B4C] relative overflow-x-hidden">
+    <div className="min-h-screen min-h-[100dvh] flex flex-col bg-[#FFF9F0] text-[#073B4C] font-sans antialiased selection:bg-[#FFD166] selection:text-[#073B4C] relative overflow-x-hidden">
       {/* Background Graphic Blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-0 opacity-40">
         <div className="absolute top-12 -left-20 w-72 h-72 rounded-full bg-[#FFD166] blur-3xl" />
@@ -1445,8 +1549,21 @@ export default function App() {
       />
 
       {/* View Router */}
-      <main className="flex-1 flex flex-col items-center justify-center relative z-10 w-full pb-8">
-        {/* 1. MODE SELECTION SCREEN */}
+      <main className="flex-1 flex flex-col items-center justify-start sm:justify-center relative z-10 w-full px-1.5 sm:px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        {/* 1. WELCOME / GAME HUB SCREEN */}
+        {currentView === 'welcome' && (
+          <WelcomeHub
+            language={settings.language}
+            onSelectGame={(game) => {
+              handleSelectGame(game);
+              setCurrentView('mode-select');
+            }}
+            onOpenSettings={() => setShowSettingsModal(true)}
+            onOpenCustomizer={() => setShowCustomizerModal(true)}
+          />
+        )}
+
+        {/* 2. MODE SELECTION SCREEN */}
         {currentView === 'mode-select' && (
           <ModeSelection
             language={settings.language}
@@ -1472,10 +1589,11 @@ export default function App() {
             player1={player1}
             player2={player2}
             onOpenLocalSetup={() => setShowLocalSetupModal(true)}
+            onBackToHub={() => setCurrentView('welcome')}
           />
         )}
 
-        {/* 2. ONLINE LOBBY SCREEN */}
+        {/* 3. ONLINE LOBBY SCREEN */}
         {currentView === 'online-lobby' && (
           <OnlineLobby
             localPlayer={player1}
@@ -1495,7 +1613,7 @@ export default function App() {
 
         {/* 3. ACTIVE GAME PLAYING SCREEN */}
         {currentView === 'playing' && (
-          <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 flex flex-col items-center gap-2 sm:gap-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl mx-auto px-1 sm:px-4 flex flex-col items-center gap-1.5 sm:gap-3 animate-in fade-in duration-200">
             {/* Top Game Bar: Back, Board Tag, Settings */}
             <div className="w-full max-w-xl flex items-center justify-between gap-1.5 py-1">
               <button
@@ -1726,6 +1844,15 @@ export default function App() {
         />
       )}
 
+      {/* Confetti & Particle Celebration on Win */}
+      {winnerPlayer && (isC4GameOver || isDotsGameOver || isTicTacToeGameOver) && (
+        <CelebrationEffects
+          winner={winnerPlayer}
+          gameType={activeGame}
+          reducedMotion={settings.reducedMotion}
+        />
+      )}
+
       {/* Game Result Modal (Win / Draw) */}
       {(isC4GameOver || isDotsGameOver || isTicTacToeGameOver) && !isResultModalDismissedForReplay && (
         <GameResultModal
@@ -1826,6 +1953,9 @@ export default function App() {
           language={settings.language}
         />
       )}
+
+      {/* PWA Update Notification Toast */}
+      <PwaUpdateToast language={settings.language} />
 
       {/* PWA Install Prompt (Offline banner) */}
       <InstallPrompt language={settings.language} />

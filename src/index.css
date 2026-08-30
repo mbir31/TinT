@@ -8,14 +8,29 @@
     --sun-yellow: #FFD166;
     --emerald-green: #06D6A0;
     --ocean-blue: #118AB2;
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
   }
 
-  body {
+  html, body {
     background-color: #FFF9F0;
     color: #2D3436;
     font-family: 'Noto Serif Bengali', 'Outfit', 'Plus Jakarta Sans', Georgia, serif;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Allow text selection in form fields and editable areas */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
   }
 }
 
@@ -158,5 +173,90 @@
 .bg-dot-pattern {
   background-image: radial-gradient(#073B4C 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+/* Invalid move shake feedback */
+@keyframes shakeInvalid {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px) rotate(-1deg); }
+  40% { transform: translateX(5px) rotate(1deg); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.cell-shake-invalid {
+  animation: shakeInvalid 0.28s ease-in-out;
+}
+
+/* Connect Four smooth disc drop */
+@keyframes c4DiscDrop {
+  0% {
+    transform: translateY(calc(var(--drop-row, 5) * -110% - 60px)) scale(0.9);
+    opacity: 0.9;
+  }
+  75% {
+    transform: translateY(6px) scale(1.04, 0.95);
+    opacity: 1;
+  }
+  90% {
+    transform: translateY(-3px) scale(0.98, 1.02);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.c4-disc-drop-anim {
+  animation: c4DiscDrop 0.38s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Custom Board Scrollbar for Large Boards */
+.custom-board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #073B4C rgba(7, 59, 76, 0.12);
+  -webkit-overflow-scrolling: touch;
+}
+
+.custom-board-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-board-scroll::-webkit-scrollbar-track {
+  background: rgba(7, 59, 76, 0.06);
+  border-radius: 9999px;
+}
+
+.custom-board-scroll::-webkit-scrollbar-thumb {
+  background-color: #073B4C;
+  border-radius: 9999px;
+}
+
+/* Reduced motion accessibility support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .board-3d-surface {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .token-3d-drop,
+  .c4-disc-drop-anim,
+  .cell-shake-invalid,
+  .cell-winning-glow,
+  .winning-move-replaying,
+  .dots-winning-line-glow,
+  .box-celebrate-anim {
+    animation: none !important;
+  }
 }
 
