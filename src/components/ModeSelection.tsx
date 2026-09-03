@@ -173,7 +173,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
             </div>
           </div>
           <span className="hidden sm:inline-block px-3 py-1 rounded-xl bg-white text-[#073B4C] font-black text-xs border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex-shrink-0">
-            {t.startMatch} →
+            {t.startGame} →
           </span>
         </button>
 
@@ -251,7 +251,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
             </div>
           </div>
           <span className="hidden sm:inline-block px-3 py-1 rounded-xl bg-white text-[#073B4C] font-black text-xs border-2 border-[#073B4C] shadow-[2px_2px_0px_0px_#073B4C] flex-shrink-0">
-            {t.startMatch} →
+            {t.startGame} →
           </span>
         </button>
 
@@ -273,7 +273,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
                   : 'bg-white/90 text-[#073B4C] opacity-80 hover:opacity-100'
               }`}
             >
-              {t.easy}
+              {t.difficultyEasy}
             </button>
             <button
               id="diff-medium"
@@ -288,7 +288,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               }`}
             >
               <span className="flex items-center justify-center gap-1">
-                <Flame className="w-3 h-3 text-[#EF476F]" /> {t.medium}
+                <Flame className="w-3 h-3 text-[#EF476F]" /> {t.difficultyMedium}
               </span>
             </button>
             <button
@@ -304,7 +304,7 @@ export const ModeSelection: React.FC<ModeSelectionProps> = ({
               }`}
             >
               <span className="flex items-center justify-center gap-1">
-                <ShieldAlert className="w-3 h-3 text-yellow-300" /> {t.hard}
+                <ShieldAlert className="w-3 h-3 text-yellow-300" /> {t.difficultyHard}
               </span>
             </button>
           </div>

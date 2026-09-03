@@ -74,6 +74,16 @@ export const clearStoredOnlineSession = (): void => {
   }
 };
 
+/** Remove the persisted local player session id (used by "Reset All Local Data"). */
+export const clearLocalPlayerSessionId = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_PLAYER_KEY);
+  } catch (e) {
+    console.error('Error clearing local player session id', e);
+  }
+};
+
 // Initialize or retrieve socket instance
 export const getSocket = (): Socket => {
   if (!socket) {

@@ -299,7 +299,7 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
                 gameState.lastLine?.col === c;
 
               const isWinning =
-                (gameState.isGameOver && isLast) ||
+                (gameState.status !== 'playing' && isLast) ||
                 (winningLine?.orientation === 'horizontal' &&
                   winningLine?.row === r &&
                   winningLine?.col === c);
@@ -429,7 +429,7 @@ export const DotsGameBoard: React.FC<DotsGameBoardProps> = memo(({
                 gameState.lastLine?.col === c;
 
               const isWinning =
-                (gameState.isGameOver && isLast) ||
+                (gameState.status !== 'playing' && isLast) ||
                 (winningLine?.orientation === 'vertical' &&
                   winningLine?.row === r &&
                   winningLine?.col === c);

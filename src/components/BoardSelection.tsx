@@ -91,10 +91,10 @@ export const BoardSelection: React.FC<BoardSelectionProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black text-[#073B4C] leading-none">
-                {t.boardSelectTitle}
+                {t.selectBoard}
               </h2>
               <span className="text-xs font-bold text-[#4A4E69]">
-                ৩x৩ থেকে ১৫x১৫ গ্রিড
+                {language === 'bn' ? '৩×৩ থেকে ১৫×১৫ গ্রিড' : '3×3 to 15×15 Grids'}
               </span>
             </div>
           </div>

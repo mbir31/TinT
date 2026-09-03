@@ -199,7 +199,7 @@ export const GameResultModal: React.FC<GameResultModalProps> = ({
             className="w-full py-2.5 rounded-2xl bg-white border-2 border-[#073B4C] text-[#4A4E69] font-black text-xs shadow-[2px_2px_0px_0px_#073B4C] hover:bg-slate-50 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2"
           >
             <Home className="w-4 h-4" />
-            <span>{t.homeMenu}</span>
+            <span>{t.home}</span>
           </button>
         </div>
       </div>

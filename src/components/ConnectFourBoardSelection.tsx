@@ -191,8 +191,8 @@ export const ConnectFourBoardSelection: React.FC<ConnectFourBoardSelectionProps>
                     className="w-full accent-[#06D6A0] cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] font-bold text-[#4A4E69] mt-1">
-                    <span>৫ কলাম</span>
-                    <span>৯ কলাম</span>
+                    <span>{formatNumberByLang(5, language)} {language === 'bn' ? 'কলাম' : 'cols'}</span>
+                    <span>{formatNumberByLang(9, language)} {language === 'bn' ? 'কলাম' : 'cols'}</span>
                   </div>
                 </div>
 
@@ -215,8 +215,8 @@ export const ConnectFourBoardSelection: React.FC<ConnectFourBoardSelectionProps>
                     className="w-full accent-[#06D6A0] cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] font-bold text-[#4A4E69] mt-1">
-                    <span>৪ সারি</span>
-                    <span>৮ সারি</span>
+                    <span>{formatNumberByLang(4, language)} {language === 'bn' ? 'সারি' : 'rows'}</span>
+                    <span>{formatNumberByLang(8, language)} {language === 'bn' ? 'সারি' : 'rows'}</span>
                   </div>
                 </div>
               </div>
