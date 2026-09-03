@@ -14,6 +14,8 @@ import {
   GameType
 } from '../types';
 import { idbSet, idbGet, idbDelete, recordMatchHistory, MatchRecord } from './indexedDb';
+import { clearPlayerStats } from './achievements';
+import { clearStoredOnlineSession, clearLocalPlayerSessionId } from './multiplayerEngine';
 
 const STORAGE_KEY_SETTINGS = 'tint_settings_v1';
 const STORAGE_KEY_ACTIVE_TTT = 'tint_active_local_game';
@@ -231,6 +233,10 @@ export const clearAllLocalData = (): void => {
     idbDelete('active_games', 'tictactoe').catch(() => {});
     idbDelete('active_games', 'dotsboxes').catch(() => {});
     idbDelete('active_games', 'connectfour').catch(() => {});
+    // Player stats, achievements, and online session state are also local data
+    clearPlayerStats();
+    clearStoredOnlineSession();
+    clearLocalPlayerSessionId();
   } catch {
     // Ignore
   }

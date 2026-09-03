@@ -295,7 +295,7 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-[#06D6A0] text-white font-black text-xs border border-[#073B4C] flex items-center justify-center">
-                    ১
+                    {language === 'bn' ? '১' : '1'}
                   </span>
                   <h4 className="text-sm sm:text-base font-black text-[#073B4C]">
                     {t.createRoom}
@@ -367,7 +367,7 @@ export const OnlineLobby: React.FC<OnlineLobbyProps> = ({
             <div className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-[#FFD166]/20 border-2 sm:border-3 border-[#073B4C] flex flex-col gap-2.5 sm:gap-3">
               <div className="flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#FFD166] text-[#073B4C] font-black text-xs border border-[#073B4C] flex items-center justify-center">
-                  ২
+                  {language === 'bn' ? '২' : '2'}
                 </span>
                 <h4 className="text-sm sm:text-base font-black text-[#073B4C]">
                   {t.joinRoom}

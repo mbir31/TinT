@@ -152,7 +152,7 @@ export const PlayerCustomizer: React.FC<PlayerCustomizerProps> = ({
               </div>
               <div>
                 <h2 className="text-base sm:text-xl font-black text-[#073B4C] leading-none">
-                  {t.customizerTitle}
+                  {t.customizePlayers}
                 </h2>
                 <span className="text-[11px] sm:text-xs font-bold text-[#4A4E69]">
                   {t.customizerDesc}

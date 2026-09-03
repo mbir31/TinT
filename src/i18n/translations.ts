@@ -179,6 +179,23 @@ export const TRANSLATIONS = {
     installApp: 'অ্যাপ ইনস্টল করুন',
     installPrompt: 'হোমস্ক্রিনে যোগ করে অফলাইনে খেলুন',
     
+    // Misc UI (buttons, badges & toggles)
+    standardPresets: 'স্ট্যান্ডার্ড প্রিসেট',
+    applyCustomBoard: 'কাস্টম বোর্ড প্রয়োগ করুন',
+    congratulations: 'অভিনন্দন',
+    victory: 'বিজয়ী!',
+    rematch: 'রিম্যাচ',
+    rematchWaiting: 'রিম্যাচের অপেক্ষায়...',
+    liveP2P: 'লাইভ P2P',
+    createOrJoinRoom: 'রুম তৈরি বা যোগ দিন',
+    customizerDesc: 'খেলোয়াড়, থিম ও পছন্দ কাস্টমাইজ করুন',
+    avatarSymbol: 'অবতার / চিহ্ন',
+    saveAndPlay: 'সংরক্ষণ ও খেলুন',
+    on: 'চালু',
+    off: 'বন্ধ',
+    volume: 'শব্দের মাত্রা',
+    resetBtn: 'রিসেট',
+    
     // Credits
     credit: 'Made with ♥ by ©munabbiRMushran'
   },
@@ -341,6 +358,23 @@ export const TRANSLATIONS = {
     offlineStatus: 'You are currently offline (Local and AI modes fully functional)',
     installApp: 'Install App',
     installPrompt: 'Install to home screen for fast offline play',
+    
+    // Misc UI (buttons, badges & toggles)
+    standardPresets: 'Standard Presets',
+    applyCustomBoard: 'Apply Custom Board',
+    congratulations: 'Congratulations',
+    victory: 'Victory!',
+    rematch: 'Rematch',
+    rematchWaiting: 'Waiting for rematch...',
+    liveP2P: 'LIVE P2P',
+    createOrJoinRoom: 'Create or Join Room',
+    customizerDesc: 'Customize players, themes & preferences',
+    avatarSymbol: 'Avatar / Symbol',
+    saveAndPlay: 'Save & Play',
+    on: 'On',
+    off: 'Off',
+    volume: 'Volume',
+    resetBtn: 'Reset',
     
     // Credits
     credit: 'Made with ♥ by ©munabbiRMushran'

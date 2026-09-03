@@ -62,7 +62,7 @@ export const InstallPrompt: React.FC<{ language: Language }> = ({ language }) =>
             onClick={handleInstall}
             className="px-3 py-1.5 rounded-xl bg-[#06D6A0] border-2 border-[#073B4C] text-[#073B4C] font-black text-xs shadow-[2px_2px_0px_0px_#073B4C] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
           >
-            {t.installBtn}
+            {t.installApp}
           </button>
           <button
             onClick={() => setIsDismissed(true)}

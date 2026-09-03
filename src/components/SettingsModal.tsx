@@ -86,7 +86,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black text-[#073B4C] leading-none">
-                {t.settingsTitle}
+                {t.settings}
               </h2>
               <span className="text-xs font-bold text-[#4A4E69]">
                 {t.customizerDesc}
@@ -205,7 +205,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Smartphone className="w-5 h-5 text-[#EF476F]" />
               <div>
                 <span className="text-sm font-black text-[#073B4C] block">
-                  {t.vibration}
+                  {t.hapticFeedback}
                 </span>
                 <span className="text-xs font-bold text-[#4A4E69]">
                   Haptic Feedback
@@ -579,7 +579,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm font-black text-[#073B4C] block">
-                  {t.resetAllData}
+                  {t.resetData}
                 </span>
                 <span className="text-xs font-bold text-[#4A4E69]">
                   Clear preferences & storage
@@ -597,7 +597,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {showResetConfirm && (
               <div className="p-3 bg-white rounded-xl border border-[#EF476F] flex flex-col gap-2 mt-2">
                 <span className="text-xs font-black text-[#073B4C]">
-                  {t.resetConfirmText}
+                  {t.resetConfirmDesc}
                 </span>
                 <div className="flex gap-2">
                   <button

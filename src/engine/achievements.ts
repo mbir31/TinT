@@ -131,6 +131,16 @@ export const savePlayerStats = (stats: PlayerStats): void => {
   }
 };
 
+/** Fully remove persisted player stats/achievements (used by "Reset All Local Data"). */
+export const clearPlayerStats = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STATS_STORAGE_KEY);
+  } catch {
+    // Ignore
+  }
+};
+
 /**
  * Checks milestones after a win and returns newly unlocked achievements
  */

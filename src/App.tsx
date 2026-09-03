@@ -26,6 +26,7 @@ import {
   DotsBoardConfig,
   ConnectFourConfig,
   GameState,
+  GameStatus,
   DotsGameState,
   ConnectFourGameState,
   DotsLine,
@@ -221,6 +222,12 @@ export default function App() {
       if (inviteRoom && inviteRoom.trim().length >= 3) {
         setActiveMode('online');
         setCurrentView('online-lobby');
+      } else {
+        const gameParam = params.get('game');
+        if (gameParam === 'tictactoe' || gameParam === 'dotsboxes' || gameParam === 'connectfour') {
+          setActiveGame(gameParam);
+          setCurrentView('mode-select');
+        }
       }
     }
   }, []);
@@ -561,8 +568,6 @@ export default function App() {
           : null;
 
         if (result.nextState.status === 'won') {
-          soundEngine.playWin();
-          hapticsEngine.trigger('win');
           if (winner) {
             triggerAchievementCheck(
               winner,
@@ -581,8 +586,6 @@ export default function App() {
             }
           }
         } else {
-          soundEngine.playDraw();
-          hapticsEngine.trigger('draw');
           recordGameLossOrDraw();
         }
 
@@ -636,8 +639,6 @@ export default function App() {
                 : null;
 
               if (result.nextState.status === 'won') {
-                soundEngine.playWin();
-                hapticsEngine.trigger('win');
                 if (winner && !winner.isAI) {
                   triggerAchievementCheck(
                     winner,
@@ -650,8 +651,6 @@ export default function App() {
                   recordGameLossOrDraw();
                 }
               } else {
-                soundEngine.playDraw();
-                hapticsEngine.trigger('draw');
                 recordGameLossOrDraw();
               }
 
@@ -720,8 +719,6 @@ export default function App() {
           : null;
 
         if (result.nextState.status === 'won') {
-          soundEngine.playWin();
-          hapticsEngine.trigger('win');
           if (winner) {
             const winnerScore = result.nextState.playerScores[winner.id] || 0;
             triggerAchievementCheck(
@@ -733,8 +730,6 @@ export default function App() {
             );
           }
         } else {
-          soundEngine.playDraw();
-          hapticsEngine.trigger('draw');
           recordGameLossOrDraw();
         }
 
@@ -787,8 +782,6 @@ export default function App() {
                 : null;
 
               if (result.nextState.status === 'won') {
-                soundEngine.playWin();
-                hapticsEngine.trigger('win');
                 if (winner && !winner.isAI) {
                   const winnerScore = result.nextState.playerScores[winner.id] || 0;
                   triggerAchievementCheck(
@@ -802,8 +795,6 @@ export default function App() {
                   recordGameLossOrDraw();
                 }
               } else {
-                soundEngine.playDraw();
-                hapticsEngine.trigger('draw');
                 recordGameLossOrDraw();
               }
 
@@ -867,7 +858,7 @@ export default function App() {
       // Check for win
       const winResult = checkWin(newBoard, row, col, gameState.boardConfig.winLength);
 
-      let nextStatus = gameState.status;
+      let nextStatus: GameStatus = gameState.status;
       let winnerId: string | null = null;
       let winningCells: CellCoord[] = [];
 
@@ -877,8 +868,6 @@ export default function App() {
         winningCells = winResult.winningCells;
         setWinningMoveCoord({ row, col });
         setIsResultModalDismissedForReplay(false);
-        soundEngine.playWin();
-        hapticsEngine.trigger('win');
 
         triggerAchievementCheck(
           currentPlayer,
@@ -908,8 +897,6 @@ export default function App() {
       } else if (isBoardFull(newBoard)) {
         nextStatus = 'draw';
         setIsResultModalDismissedForReplay(false);
-        soundEngine.playDraw();
-        hapticsEngine.trigger('draw');
         recordGameLossOrDraw();
 
         logCompletedMatch(
@@ -980,7 +967,7 @@ export default function App() {
             hapticsEngine.trigger('move');
 
             const winResult = checkWin(newBoard, move.row, move.col, gameState.boardConfig.winLength);
-            let nextStatus = gameState.status;
+            let nextStatus: GameStatus = gameState.status;
             let winnerId: string | null = null;
             let winningCells: CellCoord[] = [];
 
@@ -1082,6 +1069,12 @@ export default function App() {
       setIsOnlineWaiting(false);
       setShowCountdown(false);
       setCurrentView('playing');
+      // Fresh game (join or rematch): clear stale move/winning highlights from any previous match
+      setLastMoveCoord(null);
+      setWinningMoveCoord(null);
+      setWinningDotsLine(null);
+      setIsReplayingWinningMove(false);
+      setIsResultModalDismissedForReplay(false);
     }
 
     // Audio-visual feedback for opponent moves
@@ -1110,20 +1103,19 @@ export default function App() {
       const nextGame = updatedRoom.gameState;
       setGameState((prev) => {
         if (prev.status === 'playing' && nextGame.status === 'won') {
-          soundEngine.playWin();
-          hapticsEngine.trigger('win');
           const winner = nextGame.players.find((p) => p.id === nextGame.winnerPlayerId);
           if (winner) {
-            triggerAchievementCheck(winner, 'tictactoe', 'online');
-            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
-            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+            if (winner.id === localOnlineId) {
+              triggerAchievementCheck(winner, 'tictactoe', 'online');
+            } else {
+              recordGameLossOrDraw();
+            }
           }
           if (nextGame.winningCells && nextGame.winningCells.length > 0) {
             setWinningMoveCoord(nextGame.winningCells[0]);
           }
         } else if (prev.status === 'playing' && nextGame.status === 'draw') {
-          soundEngine.playDraw();
-          hapticsEngine.trigger('draw');
+          recordGameLossOrDraw();
         }
         return nextGame;
       });
@@ -1131,21 +1123,20 @@ export default function App() {
       const nextDots = updatedRoom.dotsGameState;
       setDotsGameState((prev) => {
         if (prev.status === 'playing' && nextDots.status === 'won') {
-          soundEngine.playWin();
-          hapticsEngine.trigger('win');
           const winner = nextDots.players.find((p) => p.id === nextDots.winnerPlayerId);
           if (winner) {
-            const wScore = nextDots.playerScores[winner.id] || 0;
-            triggerAchievementCheck(winner, 'dotsboxes', 'online', undefined, wScore);
-            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
-            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+            if (winner.id === localOnlineId) {
+              const wScore = nextDots.playerScores[winner.id] || 0;
+              triggerAchievementCheck(winner, 'dotsboxes', 'online', undefined, wScore);
+            } else {
+              recordGameLossOrDraw();
+            }
           }
           if (nextDots.lastLine) {
             setWinningDotsLine(nextDots.lastLine);
           }
         } else if (prev.status === 'playing' && nextDots.status === 'draw') {
-          soundEngine.playDraw();
-          hapticsEngine.trigger('draw');
+          recordGameLossOrDraw();
         }
         return nextDots;
       });
@@ -1153,17 +1144,16 @@ export default function App() {
       const nextC4 = updatedRoom.c4GameState;
       setC4GameState((prev) => {
         if (prev.status === 'playing' && nextC4.status === 'won') {
-          soundEngine.playWin();
-          hapticsEngine.trigger('win');
           const winner = nextC4.players.find((p) => p.id === nextC4.winnerPlayerId);
           if (winner) {
-            triggerAchievementCheck(winner, 'connectfour', 'online');
-            if (winner.id === player1.id) setPlayer1((p) => ({ ...p, score: p.score + 1 }));
-            else if (winner.id === player2.id) setPlayer2((p) => ({ ...p, score: p.score + 1 }));
+            if (winner.id === localOnlineId) {
+              triggerAchievementCheck(winner, 'connectfour', 'online');
+            } else {
+              recordGameLossOrDraw();
+            }
           }
         } else if (prev.status === 'playing' && nextC4.status === 'draw') {
-          soundEngine.playDraw();
-          hapticsEngine.trigger('draw');
+          recordGameLossOrDraw();
         }
         return nextC4;
       });
@@ -1384,7 +1374,7 @@ export default function App() {
     setIsResultModalDismissedForReplay(false);
     setWinningMoveCoord(null);
     setWinningDotsLine(null);
-    if (gameState.mode === 'online') {
+    if (activeMode === 'online' || roomCode) {
       handleLeaveOnline();
     }
     saveActiveLocalGame(null);
@@ -1429,7 +1419,7 @@ export default function App() {
       });
       return {
         ...prev,
-        players: updatedPlayers
+        players: updatedPlayers as [Player, Player]
       };
     });
 
@@ -1443,7 +1433,7 @@ export default function App() {
       });
       return {
         ...prev,
-        players: updatedPlayers
+        players: updatedPlayers as [Player, Player]
       };
     });
 
@@ -1457,7 +1447,7 @@ export default function App() {
       });
       return {
         ...prev,
-        players: updatedPlayers
+        players: updatedPlayers as [Player, Player]
       };
     });
   };
